@@ -232,8 +232,7 @@ window.__retryJS=async()=>{for(const src of __failedJS.splice(0)){let ok=false;f
 <script src="assets3d/lib/GLTFLoader.js"></script>
 <script src="assets3d/lib/SkeletonUtils.js"></script>
 <script src="assets3d/models.js"></script>
-<script src="assets3d/hero.js"></script>
-<script src="assets3d/anims.js"></script>
+<script src="assets3d/hero-man.js"></script>
 <script src="assets3d/spruce.js"></script>
 <script src="assets3d/cabin.js"></script>
 <script src="assets3d/stove.js"></script>
@@ -393,8 +392,10 @@ async function loadAll(){
  for(const k of keys){T[k]=await withTimeout(loadGLB(k),k);n++;if(n%8===0)document.getElementById('screenBox').textContent=`Загрузка 3D-мира… ${Math.round(n/keys.length*100)}%`;}
  // герой: зимний выживальщик, сделан в Tripo (картинка → умная сетка → текстура → риг Mixamo → 6 анимаций).
  // Исходник — ДЛЯ_НЕЙРОСЕТИ/tripo/hero-tripo.glb (прежний Remy — assets3d/hero-remy.js). Лежит в assets3d/hero.js как base64 — так игра открывается и двойным кликом по файлу (без сервера fetch запрещён)
- const HERO_URL='assets3d/hero.js';
- if(!window.HERO_GLB)throw HERO_URL;const ab=b2a(window.HERO_GLB);
+ // 07.11: новый базовый герой — «muscular man» пользователя, риг Mixamo, 19 анимаций Mixamo внутри GLB (assets3d/hero-man.js).
+ // Прежний герой из Tripo остался в assets3d/hero.js (+ anims.js) — не подключается.
+ const HERO_URL='assets3d/hero-man.js';
+ if(!window.HERO_MAN_GLB)throw HERO_URL;const ab=b2a(window.HERO_MAN_GLB);
  T.hero=await withTimeout(new Promise((res,rej)=>new THREE.GLTFLoader().parse(ab,'',res,()=>rej(HERO_URL))),'герой');
  // ель из Tripo (картинка → 3D, ~7.7k треугольников): ставится вблизи, вдали остаются лёгкие процедурные ели. Исходник — assets3d/models-new/spruce-tripo.glb
  if(window.LOGS_GLB)try{T.logs=await new Promise((res,rej)=>new THREE.GLTFLoader().parse(b2a(window.LOGS_GLB),'',res,rej));}catch(e){console.warn('logs',e);}
@@ -1577,13 +1578,13 @@ function makeHero(){
   if(m.isSkinnedMesh&&!/Eye/.test(m.name)){const x=new THREE.SkinnedMesh(m.geometry,xray);x.bind(m.skeleton,m.bindMatrix);x.renderOrder=1;x.frustumCulled=false;x.castShadow=false;extra.push([m.parent,x]);}}});
  extra.forEach(([p,x])=>p.add(x));
  scene.add(hero);
- heroAnim=animSet(g,model,{idle:['idle.001','idle'],walk:['walk.001','walk'],run:['run.001','run'],act:['lift_heavy.001'],hit:['hit_to_body_01.001'],death:['fall.001']});
- // дополнительные анимации из Mixamo (assets3d/anims.js): холод, усталость, лестница, у огня, сон, бросок, схватка, рубка, питьё и т.д.
- if(window.HERO_ANIMS)for(const[k,a]of Object.entries(HERO_ANIMS)){
-  const tracks=a.t.map(([n,t,v])=>/quaternion$/.test(n)?new THREE.QuaternionKeyframeTrack(n,t,v):new THREE.VectorKeyframeTrack(n,t,v));
-  heroAnim.acts[k]=heroAnim.mixer.clipAction(new THREE.AnimationClip(k,a.d,tracks));}
- // «поднять тяжёлое» длится 19,5 с; для действия берём кусок 15–19,5 с (присел — выпрямился) и играем вдвое быстрее
- if(heroAnim.acts.act){const c=heroAnim.acts.act.getClip();if(c.duration>8){const sub=THREE.AnimationUtils.subclip(c,'act',450,585,30);heroAnim.acts.act=heroAnim.mixer.clipAction(sub);heroAnim.acts.act.timeScale=2;}}
+ // все 19 клипов лежат в GLB под своими именами: idle, walk, run, act, hit, death, coldwalk, tired, ladder, crouch, sleep, getup, throw, wolf, shiver, chop, drink, look, fish
+ heroAnim=animSet(g,model,Object.fromEntries(g.animations.map(a=>[a.name,[a.name]])));
+ if(heroAnim.acts.act)heroAnim.acts.act.timeScale=1.6;
+ // «лестница» в Mixamo поднимает таз вверх по ходу клипа — подъём делает игра, поэтому убираем линейный дрейф по высоте
+ if(heroAnim.acts.ladder){const tr=heroAnim.acts.ladder.getClip().tracks.find(t=>/Hips\.position$/.test(t.name));
+  const iy=heroAnim.acts.idle&&heroAnim.acts.idle.getClip().tracks.find(t=>/Hips\.position$/.test(t.name));
+  if(tr){const v=tr.values,n=v.length/3,dy=v[(n-1)*3+1]-v[1],y0=v[1]-(iy?iy.values[1]:v[1]);for(let i=0;i<n;i++)v[i*3+1]-=dy*i/(n-1)+y0;}}
  // темп ходьбы/бега под скорость в игре (2,5 м/с шагом, ~4,6 м/с бегом), чтобы ноги не «скользили»:
  // в анимации на месте опорная стопа едет назад со скоростью земли — её и меряем
  const sp=a=>a?clipSpeed(g,a.getClip(),hs):0,vw=sp(heroAnim.acts.walk),vr=sp(heroAnim.acts.run);
