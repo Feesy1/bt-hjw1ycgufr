@@ -202,7 +202,7 @@ html,body,button,input,kbd{font-family:"Nunito","Segoe UI",system-ui,sans-serif}
 <div id="log"></div>
 <div id="prompt" class="panel"></div>
 <div id="help" class="panel">
-<span>WASD</span> ходьба · <span>Shift</span> бег · <span>E</span> действие · <span>F</span> костёр · <span>L</span> фонарик · <span>J</span> журнал<br>
+<span>WASD</span> ходьба · <span>Shift</span> бег · <span>E</span> действие · <span>F</span> костёр · <span>L</span> фонарь · <span>J</span> журнал<br>
 <span>Q</span>/клик камень · <span>I</span> рюкзак · <span>Tab</span> состояние · <span>M</span> карта · <span>R</span> сон · колесо — камера · <span>H</span> скрыть
 </div>
 <div id="modal" hidden><div class="box panel"><h2 id="mTitle"></h2><div class="sub" id="mSub"></div><div id="mOpts"></div><div class="foot" id="mFoot"></div></div></div>
@@ -299,8 +299,8 @@ const ITEMS={
  pot:{n:'Котелок',w:.8,cat:'misc',d:'Помятый походный котелок. Нужен, чтобы растопить снег и вскипятить воду на костре или в печи.'},
  bedroll:{n:'Спальник',w:2,cat:'misc',d:'Тёплый спальный мешок. Можно спать где угодно — в нём гораздо теплее, чем на голом полу.'},
  rod:{n:'Удочка',w:.8,cat:'misc',d:'Складная удочка для подлёдной рыбалки. Лунки есть в рыбацких будках и на озере. Со временем изнашивается.'},
- flash:{n:'Фонарик',w:.3,cat:'misc',d:'Карманный фонарик пилота. L — включить/выключить. Светит туда, куда смотрит герой. Комплекта батареек хватает на 4 часа.'},
- cells:{n:'Батарейки',w:.05,cat:'misc',use:{v:'Вставить в фонарик'},d:'Пара батареек. Полностью заряжает фонарик (4 часа света).'},
+ flash:{n:'Керосиновый фонарь',w:.9,cat:'misc',d:'Старый «летучая мышь». L — достать и зажечь / погасить. Герой держит его перед собой, свет падает вперёд. Горит на керосине: полный бак — 5 часов.'},
+ oil:{n:'Бутылка керосина',w:.4,cat:'misc',use:{v:'Заправить фонарь'},d:'Мутная бутылка с керосином. Добавляет фонарю 2,5 часа горения (бак — не больше 5 часов).'},
  battery:{n:'Аккумулятор',w:2,cat:'misc',d:'Заряженный аккумулятор. Подключите его к рации на посту лесника (северо-восток), чтобы вызвать помощь.'},
  // одежда: s — слот, t — тепло (°C), wp — защита от ветра (0…1)
  knitcap:{n:'Вязаная шапка',w:.15,cat:'cloth',s:'head',t:1.5,wp:.15,d:'Простая шерстяная шапка.'},
@@ -675,7 +675,11 @@ const FLOOR_T=.21;
 const WALKM=[],WALKBOX=[],_wrc=new THREE.Raycaster(),_wdn=new THREE.Vector3(0,-1,0),_wro=new THREE.Vector3();
 function walkY(x,z,from){if(!WALKBOX.some(w=>Math.hypot(x-w.x,z-w.z)<w.r))return null;_wro.set(x,from,z);_wrc.set(_wro,_wdn);const h=_wrc.intersectObjects(WALKM,false)[0];return h?h.point.y:null;}
 const STEP_UP=.75; // на сколько герой может шагнуть вверх (крыло, обломки)
-function heightAt(x,z,ref){const b=buildingAt(x,z);if(b)return b.y+FLOOR_T;const g=groundY(x,z);
+function heightAt(x,z,ref){const b=buildingAt(x,z);if(b){
+  if(b.floors===2){const s=b.stair;if(x>s.x0&&x<s.x1&&z>s.z0&&z<s.z1)return b.y+FLOOR_T+clamp((x-s.x0)/(s.x1-s.x0),0,1)*b.H1; // на лестнице — по ступеням
+   if(ref!==undefined&&ref>b.y+b.H1*.5)return b.y+b.H1+FLOOR_T;} // наверху
+  return b.y+FLOOR_T;}
+ const g=groundY(x,z);
  if(WALKBOX.length){const wy=walkY(x,z,(ref===undefined?g:ref)+STEP_UP);if(wy!==null&&wy>g)return wy;}
  const d=deckAt(x,z);
  return d!==null&&d>g&&(ref===undefined||ref>d-1.2)?d:g;}
@@ -697,6 +701,13 @@ const BUILD_DEFS=[
  {id:'trap',name:'Хижина охотника',x:-86,z:-70,w:2,d:2,s:2.3,door:'S',kind:'cabin',tint:[.65,.6,.55],roof:0x2a2420,gable:0x4a3e34},
  {id:'depot',name:'Станция «Сосновая»',x:58,z:70,w:5,d:3,s:3.0,hv:1.2,door:'S',kind:'depot',tint:[1.1,.7,.62],roof:0x4a2a24,gable:0x8a4030},
  {id:'ranger',name:'Пост лесника',x:80,z:-78,w:3,d:3,s:2.6,hv:1.1,door:'S',kind:'radio',tint:[.9,1,.92],roof:0x2f4a3a,gable:0x58805f},
+ // ТЗ 2: новые постройки разного размера, назначения и силуэта (места подобраны вдали от льда, реки, дорог и других домов)
+ {id:'house2',name:'Двухэтажный дом',x:72,z:40,w:5,d:4,s:2.8,hv:1.05,door:'S',kind:'house',floors:2,part:[.55],porch:true,tint:[.86,.8,.72],roof:0x3b3f47,gable:0x6d6255},
+ {id:'house3',name:'Дом мастера',x:24,z:-62,w:4,d:3,s:2.8,hv:1.05,door:'S',kind:'house',part:[.5],porch:true,tint:[1.02,.92,.8],roof:0x5c3524,gable:0x9a6a48},
+ {id:'barrack',name:'Барак лесорубов',x:-40,z:-62,w:7,d:3,s:2.6,hv:1,door:'S',kind:'barrack',part:[.3,.68],roofType:'low',tint:[.72,.7,.66],roof:0x36383a,gable:0x55524c},
+ {id:'store',name:'Склад',x:-44,z:36,w:4,d:4,s:3.0,hv:1.45,door:'S',kind:'store',roofType:'shed',tint:[.62,.64,.66],roof:0x4b5156,gable:0x5f666b},
+ {id:'bath',name:'Баня',x:24,z:-40,w:2,d:2,s:2.2,hv:.92,door:'S',kind:'bath',roofType:'shed',tint:[.68,.52,.4],roof:0x3a2a20,gable:0x5a4030},
+ {id:'shed',name:'Сарай',x:64,z:-48,w:2,d:3,s:2.4,hv:1.1,door:'W',kind:'shed',roofType:'shed',tint:[.6,.55,.5],roof:0x3b332c,gable:0x524638},
 ];
 const ZONES=[
  // особые места — раньше общих, чтобы их название показывалось первым
@@ -739,6 +750,7 @@ function blockedAt(x,z,r,animal){
  const ix=Math.floor(x/GC),iz=Math.floor(z/GC);
  for(let a=ix-1;a<=ix+1;a++)for(let b=iz-1;b<=iz+1;b++){const L=gridC.get(gkey(a,b));if(!L)continue;
   for(const c of L){if(c.door&&c.door.open)continue; // открытая дверь не мешает
+   if(c.fl!==undefined&&c.fl!==(animal?0:(P&&P.flr)|0))continue; // поэтажные препятствия двухэтажного дома
    if(c.r){if(dist(x,z,c.x,c.z)<c.r+r)return true;}
    else if(x+r>c.x0&&x-r<c.x1&&z+r>c.z0&&z-r<c.z1)return true;}}
  if(WALKBOX.length){const y0=animal||!P||P.yv===undefined?groundY(x,z):P.yv,wy=walkY(x,z,y0+1.8);if(wy!==null&&wy>y0+STEP_UP)return true;} // слишком высоко — упираемся
@@ -800,7 +812,7 @@ function buildTerrain(){
   {const b=burnMask(x,z);if(b>0){const t=b*smooth(.45,.7,fbm(x*.22+5,z*.22-3))*.7;c=[lerp(c[0],.36,t),lerp(c[1],.35,t),lerp(c[2],.36,t)];}} // пепел, проступающий из-под снега
   col[i*3]=c[0];col[i*3+1]=c[1];col[i*3+2]=c[2];}
  g.setAttribute('color',new THREE.BufferAttribute(col,3));g.computeVertexNormals();TH=th;T_N=N;T_SZ=SZ;
- terrain=new THREE.Mesh(g,new THREE.MeshStandardMaterial({roughness:1,metalness:0,vertexColors:true,flatShading:true}));terrain.receiveShadow=true;scene.add(terrain);
+ terrain=new THREE.Mesh(g,new THREE.MeshStandardMaterial({roughness:1,metalness:0,vertexColors:true,flatShading:true}));terrain.receiveShadow=true;terrain.renderOrder=3;scene.add(terrain); // рисуется после «рентгена» героя: ступни, ушедшие в снег, не подсвечиваются синим
  // лёд
  const shp=new THREE.Shape();for(let i=0;i<=96;i++){const a=i/96*TAU,r=lakeR(a)+ICE_EDGE;const px=LAKE.x+Math.cos(a)*r,pz=LAKE.z+Math.sin(a)*r;i?shp.lineTo(px,-pz):shp.moveTo(px,-pz);}
  const ig=new THREE.ShapeGeometry(shp,4);ig.rotateX(-Math.PI/2);
@@ -924,6 +936,61 @@ function swapPiece(pc,src,flat){
  m.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;if(o.material){o.material.metalness=0;o.material.roughness=.9;o.material.color.setHex(flat===true?0x9a7a5e:0x8a8a82);}}});
  pc.add(h);
 }
+// ---------- ТЗ 2.2–2.3: перегородки, второй этаж с лестницей, крыльцо ----------
+// Лестница идёт вдоль северной (дальней от камеры) стены с запада на восток: внизу вход с запада, наверху выход на восток.
+// Перила — сплошной коллайдер; торцы закрыты «поэтажными» коллайдерами (fl:0 — только для нижнего этажа, fl:1 — для верхнего),
+// поэтому на лестницу можно зайти только с её концов, а с верхнего этажа нельзя упасть в проём
+const PLANK_M=new THREE.MeshStandardMaterial({color:0x7a6248,roughness:.95,metalness:0}),PLANK_D=new THREE.MeshStandardMaterial({color:0x5a4634,roughness:.95,metalness:0});
+function boxM(parent,w,h,d,x,y,z,mat,ry=0){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);m.rotation.y=ry;m.castShadow=true;m.receiveShadow=true;parent.add(m);return m;}
+function buildUpper(b,def,S,hv,W,D,x0,z0,y0){
+ const H1=S*hv,yU=y0+H1,P2=Math.PI;b.upper=new THREE.Group();scene.add(b.upper);b.front2=[];b.lower=new THREE.Group();scene.add(b.lower);
+ const sides=[['N',def.w,P2],['S',def.w,0],['W',def.d,-P2/2],['E',def.d,P2/2]];
+ for(const[sd,n,ry]of sides)for(let k=0;k<n;k++){
+  let cx,cz;if(sd==='N'){cx=x0+(k+.5)*S;cz=z0+.5*S;}else if(sd==='S'){cx=x0+(k+.5)*S;cz=z0+D-.5*S;}else if(sd==='W'){cx=x0+.5*S;cz=z0+(k+.5)*S;}else{cx=x0+W-.5*S;cz=z0+(k+.5)*S;}
+  const isWin=(k>0&&k<n-1&&k%2===1)||(n===2&&k===0);
+  const pc=place(isWin?'h:cabin-window-a':'h:cabin-wall',cx,yU,cz,ry,S);if(hv!==1)pc.scale.y=S*hv;b.upper.attach(pc);
+  if(def.tint)pc.traverse(m=>{if(m.isMesh){m.material=m.material.clone();m.material.color.setRGB(def.tint[0],def.tint[1],def.tint[2]);}});
+  if(sd==='S'){pc.userData.sy=pc.scale.y;b.front2.push(pc);}}
+ [[0,def.d-1,0],[def.w-1,def.d-1,P2/2],[def.w-1,0,P2],[0,0,-P2/2]].forEach(([i,j,ry],n)=>{const pc=place('h:cabin-corner-logs',x0+(i+.5)*S,yU,z0+(j+.5)*S,ry,S);if(hv!==1)pc.scale.y=S*hv;b.upper.attach(pc);
+  if(def.tint)pc.traverse(m=>{if(m.isMesh){m.material=m.material.clone();m.material.color.setRGB(def.tint[0],def.tint[1],def.tint[2]);}});if(n<2){pc.userData.sy=pc.scale.y;b.front2.push(pc);}});
+ // лестничный проём и сама лестница
+ // стены изнутри занимают ~0,6 м: лестница отступает от северной стены, а снизу (с запада) оставлен подход ~1 м
+ const sw=1.3,zs0=z0+.62,zs1=zs0+sw,xs0=x0+1.95,xs1=Math.min(x0+W-1.8,xs0+4.6),Ls=xs1-xs0;b.stair={x0:xs0,x1:xs1,z0:zs0-.1,z1:zs1};
+ const N=14;for(let i=0;i<N;i++){const h=(i+1)/N*H1;boxM(b.lower,Ls/N+.02,.12,sw,xs0+(i+.5)*Ls/N,y0+FLOOR_T+h-.06,(zs0+zs1)/2,PLANK_M);
+  boxM(b.lower,Ls/N,h,.06,xs0+(i+.5)*Ls/N,y0+FLOOR_T+h/2,zs1-.03,PLANK_D);} // косоур со стороны комнаты
+ // перила: столбики и поручень вдоль открытой стороны
+ for(let i=0;i<=4;i++){const t=i/4,px=xs0+.4+t*(Ls-.4),ph=y0+FLOOR_T+t*H1;boxM(b.lower,.07,.95,.07,px,ph+.47,zs1+.04,PLANK_D);}
+ {const a=new THREE.Vector3(xs0+.4,y0+FLOOR_T+.95+.03*H1,zs1+.04),c=new THREE.Vector3(xs1,y0+FLOOR_T+H1+.95,zs1+.04),dd=c.clone().sub(a),m=new THREE.Mesh(new THREE.BoxGeometry(dd.length(),.06,.07),PLANK_M);
+  m.position.copy(a).addScaledVector(dd,.5);m.rotation.z=Math.atan2(dd.y,dd.x);b.lower.add(m);}
+ // перила вокруг проёма наверху (видны только с верхним этажом)
+ boxM(b.upper,.07,.95,sw+.1,xs0,yU+FLOOR_T+.47,(zs0+zs1)/2,PLANK_D);boxM(b.upper,Ls,.06,.07,(xs0+xs1)/2,yU+FLOOR_T+.95,zs1+.04,PLANK_M);
+ // перекрытие с проёмом над лестницей
+ const T2=.2,yt=yU+FLOOR_T-T2/2,ix0=x0+.2,ix1=x0+W-.2,iz0=z0+.2,iz1=z0+D-.2;
+ boxM(b.upper,ix1-ix0,T2,iz1-zs1,(ix0+ix1)/2,yt,(zs1+iz1)/2,PLANK_M);
+ boxM(b.upper,xs0-ix0,T2,zs1-iz0,(ix0+xs0)/2,yt,(iz0+zs1)/2,PLANK_M);
+ boxM(b.upper,ix1-xs1,T2,zs1-iz0,(xs1+ix1)/2,yt,(iz0+zs1)/2,PLANK_M);
+ // коллайдеры: перила (оба этажа), торцы проёма по этажам
+ addCol({x0:xs0+.35,x1:xs1,z0:zs1,z1:zs1+.08});
+ addCol({x0:xs1,x1:xs1+.1,z0:z0,z1:zs1+.08,fl:0}); // внизу под высоким концом лестницы не пройти
+ addCol({x0:xs0-.1,x1:xs0,z0:z0,z1:zs1+.08,fl:1}); // наверху в проём с запада не шагнуть
+}
+function buildPartitions(b,def,S,hv,W,D,x0,z0,y0){
+ const H=S*hv*.97,g=b.lower||(b.lower=(()=>{const q=new THREE.Group();scene.add(q);return q;})());b.parts=[];
+ for(const f of def.part){const xp=x0+W*f,gap=1.3,zc=clamp(z0+D*(rnd()<.5?.35:.65),z0+1.4,z0+D-1.4);
+  if(b.stair&&xp>b.stair.x0-1&&xp<b.stair.x1+1)continue; // не режем лестницу
+  const za=z0+.25,zb=zc-gap/2,zc2=zc+gap/2,zd=z0+D-.25;
+  for(const[p,q]of[[za,zb],[zc2,zd]]){boxM(g,.14,H,q-p,xp,y0+FLOOR_T+H/2,(p+q)/2,PLANK_M);const c=addCol({x0:xp-.1,x1:xp+.1,z0:p,z1:q});if(b.floors===2)c.fl=0;}
+  boxM(g,.16,H*.22,gap+.1,xp,y0+FLOOR_T+H*.89,zc,PLANK_D); // притолока над проёмом
+  b.parts.push({x:xp,z:zc});}
+}
+function buildPorch(b,def,W,D,x0,z0,y0,H){
+ const cx=b.door?b.door.x:def.x,z1=z0+D,pw=3.4,pd=1.9,g=new THREE.Group();scene.add(g);
+ boxM(g,pw,.1,pd,cx,y0+.05,z1+pd/2,PLANK_M);
+ for(let i=0;i<5;i++)boxM(g,pw-.1,.012,.03,cx,y0+.105,z1+.2+i*.37,PLANK_D);
+ for(const s of[-1,1]){boxM(g,.14,H*.92,.14,cx+s*(pw/2-.12),y0+H*.46,z1+pd-.12,PLANK_D);addCol({x:cx+s*(pw/2-.12),z:z1+pd-.12,r:.12});}
+ const cv=boxM(g,pw+.4,.1,pd+.5,cx,y0+H*.95,z1+pd/2-.1,PLANK_D);cv.rotation.x=.18;
+ const sn=boxM(g,pw+.3,.08,pd+.4,cx,y0+H*.95+.09,z1+pd/2-.1,MAT.snow);sn.rotation.x=.18;
+ b.porch={x0:cx-pw/2,x1:cx+pw/2,z0:z1,z1:z1+pd};}
 function buildHouse(def){
  const S=def.s||CELL,hv=def.hv||1,P=Math.PI;
  const y0=def.ice?ICE_Y+.05:PADS.find(p=>p.id===def.id).h,W=def.w*S,D=def.d*S;
@@ -957,9 +1024,22 @@ function buildHouse(def){
   pc.updateMatrixWorld(true);const bb=new THREE.Box3().setFromObject(pc);addCol({x0:bb.min.x,x1:bb.max.x,z0:bb.min.z,z1:bb.max.z});});
  if(def.tint)for(const pc of b.pieces)pc.traverse(m=>{if(m.isMesh){m.material=m.material.clone();m.material.color.setRGB(def.tint[0],def.tint[1],def.tint[2]);}});
  const roofM=def.roof?MAT.roofWood.clone():MAT.roofWood,gableM=def.gable?MAT.gable.clone():MAT.gable;if(def.roof)roofM.color.setHex(def.roof);if(def.gable)gableM.color.setHex(def.gable);
- // двускатная крыша (конёк вдоль длинной стороны)
- const along=W>=D,L=(along?W:D)+1.2,Wd=(along?D:W)+1.4,half=Wd/2,rise=Math.min(3.2,half*.75),slope=Math.hypot(half,rise),ang=Math.atan2(rise,half),top=y0+S*hv;
+ // ТЗ 2: второй этаж, перегородки, крыльцо — до крыши (крыша встаёт над верхним этажом)
+ const FL=def.floors||1;b.floors=FL;b.H1=S*hv;
+ if(FL===2)buildUpper(b,def,S,hv,W,D,x0,z0,y0);
+ if(def.part)buildPartitions(b,def,S,hv,W,D,x0,z0,y0);
+ if(def.porch)buildPorch(b,def,W,D,x0,z0,y0,S*hv);
+ // двускатная крыша (конёк вдоль длинной стороны); «low» — пологая (барак), «shed» — односкатная (склад, баня, сарай)
+ const along=W>=D,L=(along?W:D)+1.2,Wd=(along?D:W)+1.4,half=Wd/2,rise=def.roofType==='low'?Math.min(1.5,half*.38):Math.min(3.2,half*.75),slope=Math.hypot(half,rise),ang=Math.atan2(rise,half),top=y0+S*hv*FL;
  const mk=(geo,mat)=>{const m=new THREE.Mesh(geo,mat);m.castShadow=true;m.receiveShadow=true;b.roof.add(m);return m;};
+ if(def.roofType==='shed'){const Dd=D+1.4,sr=Math.max(.9,Dd*.22),sl=Math.hypot(Dd,sr),sa=Math.atan2(sr,Dd);
+  const wood=mk(new THREE.BoxGeometry(W+1.2,.22,sl),roofM),snw=mk(new THREE.BoxGeometry(W+1.1,.26,sl-.05),MAT.snow);
+  wood.rotation.x=sa;wood.position.set(def.x,top+sr/2,def.z);snw.rotation.x=sa;snw.position.set(def.x,top+sr/2+.22,def.z);
+  const tr=new THREE.Shape();tr.moveTo(-D/2,0);tr.lineTo(D/2,0);tr.lineTo(D/2,sr*D/Dd);tr.lineTo(-D/2,0);const tg2=new THREE.ExtrudeGeometry(tr,{depth:.22,bevelEnabled:false});
+  for(const s of[-1,1]){const g=mk(tg2,gableM);g.rotation.y=P/2;g.position.set(def.x+s*W/2-.11,top,def.z);}
+  // труба бани — над печью у задней стены
+  if(def.kind==='bath'){const cx=def.x+W*.2,cz=def.z-D*.25;const ch=mk(new THREE.BoxGeometry(.6,1.8,.6),MAT.stone);ch.position.set(cx,top+sr*.75+.5,cz);b.chim={x:cx,y:top+sr*.75+1.4,z:cz};}
+  scene.add(b.roof);buildings.push(b);return b;}
  for(const s of[-1,1]){
   const wood=mk(new THREE.BoxGeometry(L,.22,slope),MAT.roofWood),snw=mk(new THREE.BoxGeometry(L-.1,.28,slope-.05),MAT.snow);wood.material=roofM;
   for(const m of[wood,snw]){m.rotation.order='YXZ';if(along){m.rotation.x=s*ang;m.position.set(def.x,top+rise/2+(m===snw?.22:0),def.z+s*half/2);}else{m.rotation.y=P/2;m.rotation.x=s*ang;m.position.set(def.x+s*half/2,top+rise/2+(m===snw?.22:0),def.z);}}
@@ -988,6 +1068,13 @@ const LOOTK={
  office:{empty:.12,n:[2,3],t:[['bandage',6,1,2],['can',5,1,1],['choc',4,1,2],['crackers',5,1,1],['match',6,1,3],['water',4,1,1],['soda',4,1,1],['paper',7,1,3],['pills',3,1,1],['tabs',3,1,3],['sew',2,1,1],['rag',4,1,2],['thermal',1,1,1],['sweater',1,1,1],['pot',1.5,1,1]]},
  depot:{empty:.15,n:[2,3],t:[['wood',7,1,2],['coal',6,1,3],['can',5,1,1],['match',4,1,2],['water',4,1,1],['bandage',3,1,1],['soda',3,1,1],['rag',4,1,2],['wboots',1.2,1,1],['gloves',1.4,1,1],['pot',1.3,1,1]]},
  radio:{empty:.2,n:[1,2],t:[['can',5,1,1],['match',5,1,2],['bandage',5,1,1],['water',4,1,1],['tabs',3,1,2],['pills',2,1,1],['paper',3,1,2]]},
+ // новые постройки (ТЗ 2): у каждой своя «специализация» находок
+ house:{empty:.22,n:[1,3],t:[['can',5,1,1],['choc',3,1,1],['crackers',4,1,1],['water',5,1,1],['soda',3,1,1],['match',5,1,2],['paper',5,1,2],['bandage',3,1,1],['pills',1.5,1,1],['rag',4,1,2],['sew',1.2,1,1],['pot',1.5,1,1],
+  ['knitcap',1,1,1],['scarf',1,1,1],['sweater',1.2,1,1],['thermal',.9,1,1],['jeans',.7,1,1],['gloves',.9,1,1]]},
+ barrack:{empty:.2,n:[1,3],t:[['can',6,1,2],['crackers',5,1,1],['water',4,1,1],['match',5,1,2],['rag',5,1,2],['bandage',3,1,1],['paper',4,1,2],['coal',3,1,2],['gloves',1.4,1,1],['wboots',1,1,1],['knitcap',1,1,1],['thermal',.8,1,1]]},
+ store:{empty:.18,n:[2,3],t:[['wood',8,2,3],['coal',6,1,3],['stick',5,2,3],['rag',5,1,2],['can',3,1,1],['match',3,1,2],['pot',1.5,1,1],['gloves',1.2,1,1],['sew',1,1,1]]},
+ bath:{empty:.35,n:[1,2],t:[['wood',8,1,2],['rag',6,1,2],['water',4,1,1],['match',4,1,2],['paper',3,1,1]]},
+ shed:{empty:.3,n:[1,2],t:[['wood',8,1,3],['stick',7,2,4],['rag',4,1,1],['gloves',1,1,1],['match',2,1,1]]},
  // места под открытым небом
  tower:{empty:.1,n:[2,3],t:[['match',6,1,3],['can',4,1,1],['bandage',4,1,1],['water',4,1,1],['crackers',4,1,1],['choc',3,1,1],['paper',4,1,2],['knitcap',1,1,1]]},
  mill:{empty:.15,n:[2,3],t:[['wood',9,2,3],['stick',6,2,4],['match',4,1,2],['can',3,1,1],['soda',3,1,1],['gloves',1.5,1,1],['rag',3,1,2]]},
@@ -1000,7 +1087,9 @@ const LOOTK={
 function addCache(name,kind,id,x,z,mesh){const o={kind:'box',x,z,y:groundY(x,z),name,mesh,loot:null,fixed:{},lk:kind,searched:false,b:{id,kind,name}};objs.push(o);return o;}
 // содержимое выпадает при первом обыске: так учитывается выбранная сложность (мир строится до выбора)
 function rollLoot(kind){const K=LOOTK[kind]||LOOTK.cabin,L={};if(rnd()<clamp(K.empty+DIFF.empty,0,.9))return L;const n=Math.max(1,Math.round(ri(K.n[0],K.n[1])*DIFF.loot));
- for(let i=0;i<n;i++){const e=weighted(K.t);if(ITEMS[e[0]].s&&L[e[0]])continue;L[e[0]]=(L[e[0]]||0)+(ITEMS[e[0]].s?1:ri(e[2],e[3]));}return L;}
+ for(let i=0;i<n;i++){const e=weighted(K.t);if(ITEMS[e[0]].s&&L[e[0]])continue;L[e[0]]=(L[e[0]]||0)+(ITEMS[e[0]].s?1:ri(e[2],e[3]));}
+ // ТЗ 8.4: керосин — только в постройках и не в каждой (≈1 из 7 контейнеров)
+ if(!['plane','car','tower','mill','camp'].includes(kind)&&rnd()<.14*DIFF.loot)L.oil=1;return L;}
 function ensureLoot(o){if(o.loot)return;o.loot=o.lk==='none'?{}:rollLoot(o.lk);for(const k in o.fixed)o.loot[k]=(o.loot[k]||0)+o.fixed[k];}
 const boxEmpty=o=>o.searched&&o.loot&&!Object.keys(o.loot).length;
 // чугунная печка-буржуйка: корпус на ножках, плита, дверца (светится, когда горит), труба
@@ -1070,7 +1159,10 @@ function furnish(b){
  const spots=[];
  for(let i=0;i<b.w;i++){spots.push({x:b.x0+(i+.5)*S,z:b.z0+inset,ry:0,side:'N'});spots.push({x:b.x0+(i+.5)*S,z:b.z1-inset,ry:Math.PI,side:'S'});}
  for(let j=0;j<b.d;j++){spots.push({x:b.x0+inset,z:b.z0+(j+.5)*S,ry:Math.PI/2,side:'W'});spots.push({x:b.x1-inset,z:b.z0+(j+.5)*S,ry:-Math.PI/2,side:'E'});}
- const free=spots.filter(s=>!(b.door&&dist(s.x,s.z,b.door.x,b.door.z)<2.2));
+ const free=spots.filter(s=>!(b.door&&dist(s.x,s.z,b.door.x,b.door.z)<2.2)
+  &&!(b.stair&&s.x>b.stair.x0-1.4&&s.x<b.stair.x1+1&&s.z<b.stair.z1+1) // лестница и подход к ней
+  &&!(b.parts&&b.parts.some(p=>Math.abs(s.x-p.x)<1.1))); // перегородки и их проёмы
+ const col0=colliders.length,obj0=objs.length;
  for(let i=free.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[free[i],free[j]]=[free[j],free[i]];}
  const take=()=>free.pop();
  if(b.kind!=='fish'){const s=take();if(s){const bx=s.side==='W'||s.side==='E'?s.x+(s.side==='W'?.35:-.35):s.x,bz=s.side==='N'||s.side==='S'?s.z+(s.side==='N'?.35:-.35):s.z;
@@ -1078,7 +1170,7 @@ function furnish(b){
   // кровать длиной 2 м занимает и соседнее место у стены — туда больше ничего не ставим (раньше печь вставала в кровать)
   bm.updateMatrixWorld(true);const bb=new THREE.Box3().setFromObject(bm);for(let i=free.length-1;i>=0;i--){const f=free[i];if(f.x>bb.min.x-.9&&f.x<bb.max.x+.9&&f.z>bb.min.z-.9&&f.z<bb.max.z+.9)free.splice(i,1);}}}
  // печь есть почти везде, кроме рыбацких будок (и то не во всех хижинах) — от этого зависит, можно ли там отогреться
- if(b.kind!=='fish'&&(b.kind!=='cabin'||rnd()<.6||b.shell)){let s;if(b.shell&&b.chim){ // у избы из Tripo печь стоит ровно под трубой (не ближе .7 м к стенам), дверцей к центру комнаты
+ if(b.kind!=='fish'&&b.kind!=='shed'&&(b.kind!=='store'||rnd()<.5)&&(b.kind!=='cabin'||rnd()<.6||b.shell)){let s;if(b.shell&&b.chim){ // у избы из Tripo печь стоит ровно под трубой (не ближе .7 м к стенам), дверцей к центру комнаты
    // придвигаем к ближайшей стене (.55 м), дверцей в комнату
    let sx=clamp(b.chim.x,b.x0+.7,b.x1-.7),sz=clamp(b.chim.z,b.z0+.7,b.z1-.7),ry;
    const dw=[[sx-b.x0,'W'],[b.x1-sx,'E'],[sz-b.z0,'N'],[b.z1-sz,'S']].filter(w=>!b.door||w[1]!==b.door.side).sort((a,c)=>a[0]-c[0])[0][1]; // не к стене с дверью
@@ -1092,7 +1184,7 @@ function furnish(b){
    const scr=new THREE.Mesh(new THREE.PlaneGeometry(.5,.3),new THREE.MeshBasicMaterial({color:0x2f6b47}));scr.position.set(-.2,.95,.31);g.add(scr);
    const led=new THREE.Mesh(new THREE.SphereGeometry(.05,8,6),new THREE.MeshBasicMaterial({color:0xc03030}));led.position.set(.35,1.15,.31);g.add(led);
    g.position.set(s.x,y,s.z);g.rotation.y=s.ry;scene.add(g);addCol({x:s.x,z:s.z,r:.6});objs.push({kind:'radio',x:s.x,z:s.z,y,mesh:g,led,on:false,b});}}
- const n=b.kind==='start'?1:b.kind==='office'||b.kind==='depot'?ri(3,5):b.kind==='fish'?1:ri(1,3);
+ const n=b.kind==='start'?1:b.kind==='office'||b.kind==='depot'||b.kind==='barrack'||b.kind==='store'?ri(3,5):b.kind==='fish'||b.kind==='bath'?1:b.kind==='house'?ri(2,3):ri(1,3);
  for(let i=0;i<n;i++){const s=take();if(!s)break;const f=b.kind==='start'?FURN.box:pick(Object.values(FURN));
   const m=place(f[0],s.x,y,s.z,s.ry,fitScale(f[0],f[1]*fs));
   // мебель не должна торчать из стены: сдвигаем её внутрь комнаты (зазор 12 см от внутренней стены)
@@ -1104,6 +1196,78 @@ function furnish(b){
   // содержимое выпадает при первом обыске (с учётом сложности); уникальные вещи кладутся заранее в fixed
   objs.push({kind:'box',x:s.x,z:s.z,y,name:f[2],mesh:m,loot:null,fixed:b.kind==='start'?{...START_LOOT}:{},lk:b.kind==='start'?'none':b.kind,searched:false,b});}
  if(rnd()<.6){const s=take();if(s){place('h:lantern',s.x,y,s.z,0,.9);addCol({x:s.x,z:s.z,r:.2});}}
+ decorate(b,free,y);
+ // в двухэтажном доме всё, что поставлено выше, — на первом этаже
+ if(b.floors===2){for(let i=col0;i<colliders.length;i++)if(colliders[i].fl===undefined)colliders[i].fl=0;for(let i=obj0;i<objs.length;i++)objs[i].fl=0;furnishUpper(b);}
+}
+// ---------- ТЗ 3: обстановка комнат (процедурная, недорогая по треугольникам) ----------
+// Набор зависит от назначения постройки; что именно и сколько — решает зерно мира, поэтому дома отличаются друг от друга.
+// Всё ставится у стен по свободным местам (проходы, двери, лестница уже исключены), коврики и картины не имеют столкновений
+const DEC={wood:new THREE.MeshStandardMaterial({color:0x6b5038,roughness:.9}),dark:new THREE.MeshStandardMaterial({color:0x3e2f22,roughness:.9}),
+ metal:new THREE.MeshStandardMaterial({color:0x5b5f63,roughness:.6,metalness:.4}),glass:new THREE.MeshStandardMaterial({color:0x5f7a6a,roughness:.2,transparent:true,opacity:.75}),
+ paper:new THREE.MeshStandardMaterial({color:0xd8d0bc,roughness:1}),cloth:[0x7a2e2a,0x2f4a5e,0x6a6a3a,0x5a3b5e,0x8a6a3a].map(c=>new THREE.MeshStandardMaterial({color:c,roughness:1,side:THREE.DoubleSide})),
+ book:[0x6e2a24,0x2a4a3a,0x2a3550,0x6a5a2a,0x4a3a2a,0x7a6a5a].map(c=>new THREE.MeshStandardMaterial({color:c,roughness:.9}))};
+const DEC_TEX={};
+function rugTex(seed){if(DEC_TEX['r'+seed])return DEC_TEX['r'+seed];const c=document.createElement('canvas');c.width=128;c.height=96;const x=c.getContext('2d');
+ const pal=[['#6e2a24','#b8894a','#2a2a30'],['#2f4a5e','#c9b48a','#5e2a2a'],['#4a5a2a','#d0c090','#3a2a20']][seed%3];x.fillStyle=pal[0];x.fillRect(0,0,128,96);
+ x.strokeStyle=pal[1];x.lineWidth=5;x.strokeRect(8,8,112,80);x.lineWidth=2;x.strokeRect(18,18,92,60);x.fillStyle=pal[2];for(let i=0;i<5;i++){x.beginPath();x.moveTo(64,28+i*9);x.lineTo(76,32+i*9);x.lineTo(64,36+i*9);x.lineTo(52,32+i*9);x.fill();}
+ // потёртости
+ for(let i=0;i<400;i++){x.fillStyle=`rgba(0,0,0,${Math.random()*.12})`;x.fillRect(Math.random()*128,Math.random()*96,2,2);}
+ const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;return DEC_TEX['r'+seed]=t;}
+function paintTex(seed){if(DEC_TEX['p'+seed])return DEC_TEX['p'+seed];const c=document.createElement('canvas');c.width=64;c.height=48;const x=c.getContext('2d');
+ const k=seed%4;if(k===3){x.fillStyle='#c8bfa8';x.fillRect(0,0,64,48);x.fillStyle='#4a4038';x.beginPath();x.ellipse(32,22,9,11,0,0,7);x.fill();x.fillRect(18,34,28,14);} // фотография
+ else{const g=x.createLinearGradient(0,0,0,48);g.addColorStop(0,['#9fb4c8','#d8a070','#8aa0b0'][k]);g.addColorStop(.6,'#e8eef2');g.addColorStop(1,'#cfd8de');x.fillStyle=g;x.fillRect(0,0,64,48);
+  x.fillStyle=['#2f4a3a','#3a3a40','#4a5a4a'][k];for(let i=0;i<7;i++){const px=4+i*9+Math.random()*4,h=10+Math.random()*12;x.beginPath();x.moveTo(px,34);x.lineTo(px+4,34-h);x.lineTo(px+8,34);x.fill();}}
+ const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;return DEC_TEX['p'+seed]=t;}
+function decorate(b,free,y,parent,fl){
+ parent=parent||scene;const k=b.kind,cols=[];const col=c=>{if(fl!==undefined)c.fl=fl;cols.push(c);return c;};
+ const take=()=>free.pop();const fwd=s=>[Math.sin(s.ry),Math.cos(s.ry)]; // направление «в комнату»
+ const grp2=(x,z,ry)=>{const g=new THREE.Group();g.position.set(x,y,z);g.rotation.y=ry;parent.add(g);return g;};
+ const table=(s)=>{const g=grp2(s.x,s.z,s.ry);boxM(g,1.2,.06,.7,0,.75,0,DEC.wood);for(const[a,c]of[[-.54,-.29],[.54,-.29],[-.54,.29],[.54,.29]])boxM(g,.06,.72,.06,a,.36,c,DEC.dark);
+  // на столе: посуда, бутылка, бумаги — сколько и что именно, решает зерно
+  if(rnd()<.7)boxM(g,.12,.08,.12,-.3,.82,0,DEC.metal);if(rnd()<.6){const bt=new THREE.Mesh(new THREE.CylinderGeometry(.035,.04,.26,8),DEC.glass);bt.position.set(.25,.91,.1);g.add(bt);}
+  if(rnd()<.6)boxM(g,.3,.01,.22,.05,.785,-.1,DEC.paper,rr(-.4,.4));
+  const[fx,fz]=fwd(s);g.updateMatrixWorld(true);col(addCol({x:s.x,z:s.z,r:.55}));
+  // стулья: один задвинут, второй иногда опрокинут (заброшенность)
+  for(const side of[-1,1]){if(rnd()<.25)continue;const cx=s.x+fx*.62+Math.cos(s.ry)*side*.32,cz=s.z+fz*.62-Math.sin(s.ry)*side*.32,c=grp2(cx,cz,s.ry+Math.PI);
+   boxM(c,.42,.05,.42,0,.45,0,DEC.wood);boxM(c,.42,.5,.05,0,.72,-.19,DEC.wood);for(const[a,b2]of[[-.18,-.18],[.18,-.18],[-.18,.18],[.18,.18]])boxM(c,.04,.45,.04,a,.22,b2,DEC.dark);
+   if(rnd()<.2){c.rotation.z=Math.PI/2;c.position.y=y+.22;}col(addCol({x:cx,z:cz,r:.24}));}};
+ const shelf=(s)=>{const[fx,fz]=fwd(s);const x=s.x-fx*.42,z=s.z-fz*.42,g=grp2(x,z,s.ry);
+  boxM(g,.06,1.8,.34,-.5,.9,0,DEC.dark);boxM(g,.06,1.8,.34,.5,.9,0,DEC.dark);boxM(g,1.06,.05,.36,0,1.8,0,DEC.dark);
+  for(let i=0;i<4;i++){const sy=.12+i*.45;boxM(g,1,.04,.32,0,sy,0,DEC.wood);let bx2=-.45;while(bx2<.4){const w=rr(.04,.08),h=rr(.22,.34);if(rnd()<.8)boxM(g,w,h,.22,bx2+w/2,sy+h/2+.02,0,pick(DEC.book));bx2+=w+.01;if(rnd()<.08)bx2+=.15;}}
+  col(addCol({x0:x-(Math.abs(fx)>.5?.2:.55),x1:x+(Math.abs(fx)>.5?.2:.55),z0:z-(Math.abs(fz)>.5?.2:.55),z1:z+(Math.abs(fz)>.5?.2:.55)}));};
+ const crates=(s)=>{const g=grp2(s.x,s.z,s.ry+rr(-.2,.2));const n=ri(2,3);for(let i=0;i<n;i++){const sz=rr(.45,.6);boxM(g,sz,sz,sz,rr(-.15,.15),sz/2+(i===2?.55:0),i===1?.55:0,i%2?DEC.wood:DEC.dark,rr(-.3,.3));}col(addCol({x:s.x,z:s.z,r:.55}));};
+ const bench=(s)=>{const[fx,fz]=fwd(s);const x=s.x-fx*.25,z=s.z-fz*.25,g=grp2(x,z,s.ry);boxM(g,1.6,.06,.4,0,.45,0,DEC.wood);boxM(g,.06,.42,.36,-.7,.21,0,DEC.dark);boxM(g,.06,.42,.36,.7,.21,0,DEC.dark);col(addCol({x,z,r:.45}));};
+ const bucket=(s)=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(.16,.12,.3,10),DEC.metal);m.position.set(s.x,y+.15,s.z);m.castShadow=true;parent.add(m);};
+ const sets={house:['table','shelf','crates'],start:['table'],cabin:['table','shelf','bucket'],office:['table','shelf','shelf','crates'],depot:['bench','crates','table'],radio:['shelf','table'],
+  barrack:['table','bench','bench','shelf','crates'],store:['crates','crates','crates','shelf'],bath:['bench','bucket'],shed:['crates','crates','bucket'],fish:['bucket']};
+ const list=(sets[k]||['table']).filter(()=>rnd()<.85);
+ for(const it of list){const s=take();if(!s)break;({table,shelf,crates,bench,bucket})[it](s);}
+ // коврик в центре комнаты (без столкновений), картины и фото на стенах, занавески на окнах
+ if(['house','cabin','start','office','radio','barrack'].includes(k)&&rnd()<.75){const rw=Math.min(2.2,(b.x1-b.x0)*.4),rd=Math.min(1.5,(b.z1-b.z0)*.35);let cx=(b.x0+b.x1)/2,cz=(b.z0+b.z1)/2+.3;
+  if(b.stair&&fl===undefined)cz=Math.max(cz,b.stair.z1+rd/2+.3);const m=new THREE.Mesh(new THREE.PlaneGeometry(rw,rd),new THREE.MeshStandardMaterial({map:rugTex(ri(0,2)),roughness:1}));
+  m.rotation.x=-Math.PI/2;m.rotation.z=rr(-.15,.15);m.position.set(cx,y+.012,cz);m.receiveShadow=true;parent.add(m);}
+ if(['house','cabin','start','office','radio','barrack'].includes(k)){const n=ri(1,3);for(let i=0;i<n;i++){const sd=pick(['N','W','E']),hy=y+rr(1.45,1.75);let px,pz,ry;
+   if(sd==='N'){px=rr(b.x0+1,b.x1-1);pz=b.z0+.3;ry=0;if(b.stair&&fl===undefined&&px>b.stair.x0-.5&&px<b.stair.x1+.5)continue;}else if(sd==='W'){px=b.x0+.3;pz=rr(b.z0+1,b.z1-1.5);ry=Math.PI/2;}else{px=b.x1-.3;pz=rr(b.z0+1,b.z1-1.5);ry=-Math.PI/2;}
+   const g=new THREE.Group();g.position.set(px,hy,pz);g.rotation.y=ry;g.rotation.z=rr(-.06,.06);parent.add(g);const w=rr(.4,.6),h=w*.75;boxM(g,w+.06,h+.06,.03,0,0,0,DEC.dark);
+   const pl=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshStandardMaterial({map:paintTex(ri(0,3)),roughness:.9}));pl.position.z=.017;g.add(pl);}}
+ if(['house','cabin','start','office','radio'].includes(k)&&fl===undefined)for(const w of b.windows){if(w.side==='S'||rnd()<.35)continue;const m=pick(DEC.cloth);
+  for(const s of[-1,1]){const cl=new THREE.Mesh(new THREE.PlaneGeometry(.38,1.1),m);const off=.22;let px=w.x,pz=w.z;
+   if(w.side==='N'){pz+=off;px+=s*.5;}else if(w.side==='W'){px+=off;pz+=s*.5;}else{px-=off;pz+=s*.5;}
+   cl.position.set(px,y+1.55,pz);cl.rotation.y=w.side==='N'?0:Math.PI/2;cl.rotation.z=s*.04;parent.add(cl);}}
+ return cols;}
+// второй этаж: спальня — кровати, сундук, шкаф/ящики; предметы и коллайдеры помечены fl:1
+function furnishUpper(b){
+ const y=b.y+b.H1+FLOOR_T,S=b.S,g=b.upper,spots=[];
+ for(let i=0;i<b.w;i++)spots.push({x:b.x0+(i+.5)*S,z:b.z1-.8,ry:Math.PI,side:'S'});
+ for(let j=1;j<b.d;j++){spots.push({x:b.x0+.8,z:b.z0+(j+.5)*S,ry:Math.PI/2,side:'W'});spots.push({x:b.x1-.8,z:b.z0+(j+.5)*S,ry:-Math.PI/2,side:'E'});}
+ const free=spots.filter(s=>!(s.x>b.stair.x0-1.4&&s.x<b.stair.x1+1&&s.z<b.stair.z1+1.2));
+ for(let i=free.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[free[i],free[j]]=[free[j],free[i]];}
+ const put=(k,s,sc,ry)=>{const m=place(k,s.x,y,s.z,ry===undefined?s.ry:ry,sc);g.attach(m);const c=colBB(m,.08);c.fl=1;return m;};
+ for(let i=0;i<2;i++){const s=free.pop();if(!s)break;const m=put('n:bed',s,2.7,s.ry+(s.side==='W'||s.side==='E'?0:Math.PI/2));objs.push({kind:'bed',x:s.x,z:s.z,y,b,fl:1});}
+ for(let i=0;i<2;i++){const s=free.pop();if(!s)break;const f=i?FURN.chest:pick([FURN.box,FURN.small]);const m=put(f[0],s,fitScale(f[0],f[1]),s.ry);
+  objs.push({kind:'box',x:s.x,z:s.z,y,name:f[2],mesh:m,loot:null,fixed:{},lk:b.kind,searched:false,b,fl:1});}
+ decorate(b,free,y,g,1);
 }
 // палки, камни и прочие подбираемые мелочи — отдельные небольшие меши
 const stickGeo=new THREE.CylinderGeometry(.035,.045,.9,5);stickGeo.rotateZ(Math.PI/2);
@@ -1318,7 +1482,7 @@ function buildPlane(x,z,ry){
   for(let u=-3;u<=3;u+=2)addCol({x:x+fx*u,z:z+fz*u,r:1});}
  addCache('кабина самолёта','plane','plane',x+fx*2.2-fz*1.4,z+fz*2.2+fx*1.4,g);
  const bag=grp(x-fx*1.5+fz*2,H(x-fx*1.5+fz*2,z-fz*1.5-fx*2),z-fz*1.5-fx*2,rr(0,TAU));bx(bag,.5,.35,.3,0,.18,0,PM.pack);cy(bag,.12,.12,.55,0,.42,0,PM.tent,0,0,Math.PI/2,8);
- {const pb=addCache('сумка пилота','plane','plane2',bag.position.x,bag.position.z,bag);pb.fixed.flash=1;pb.fixed.cells=1;pb.fixed.match=4;}
+ {const pb=addCache('сумка пилота','plane','plane2',bag.position.x,bag.position.z,bag);pb.fixed.match=4;}
  PLANE_START={x:x+fx*7.5,z:z+fz*7.5}; // игра начинается у обломков
  // след падения: сломанные деревья и стволы позади самолёта
  for(let i=0;i<7;i++){const d=8+i*3.5,px=x-fx*d+rr(-2,2),pz=z-fz*d+rr(-2,2);if(rnd()<.5)SNAGS.push({x:px,z:pz,y:H(px,pz)-.1,s:rr(2.5,4),ry:rr(0,TAU)});
@@ -1542,6 +1706,9 @@ function genWorld(){
   for(const b of buildings)if(b.kind==='fish')mk(b.x,b.z,b.y+FLOOR_T,true);
   for(const a of[.6,2.2,3.8,5.2])mk(LAKE.x+Math.cos(a)*lakeR(a)*.6,LAKE.z+Math.sin(a)*lakeR(a)*.6,ICE_Y+.04,false);}
  {const fb=objs.filter(o=>o.kind==='box'&&o.b.kind==='fish');if(fb.length)pick(fb).fixed.rod=1;}
+ buildThinIce();
+ // ТЗ 8.2: керосиновый фонарь лежит в стартовой хижине (не в руках с начала), с одной бутылкой керосина
+ {const sb=objs.filter(o=>o.kind==='box'&&o.b&&o.b.kind==='start');if(sb.length){const o=pick(sb);o.fixed.flash=1;o.fixed.oil=1;}}
  const sb=buildings.find(b=>b.kind==='start');START=PLANE_START||{x:(sb.x0+sb.x1)/2,z:(sb.z0+sb.z1)/2};SHELTER={x:(sb.x0+sb.x1)/2,z:(sb.z0+sb.z1)/2,b:sb};
 }
 
@@ -1555,7 +1722,22 @@ function animSet(gltf,root,map){
 }
 function play(a,name,fade=.2,once=false){const n=a.acts[name];if(!n||a.cur===n)return;n.reset();n.setLoop(once?THREE.LoopOnce:THREE.LoopRepeat);n.clampWhenFinished=once;n.enabled=true;
  if(a.cur)n.crossFadeFrom(a.cur,fade,false);n.play();a.cur=n;}
-let hero,heroAnim,torchLight,flameMesh,HERO_SPEEDS=null,flashHand=null,flashMesh,flashLight,flashLens;const _fv=new THREE.Vector3();
+let hero,heroAnim,torchLight,flameMesh,HERO_SPEEDS=null,flashHand=null,flashMesh,flashLight,flashLens,flashGlow;
+function toggleLantern(){
+ if(!P.inv.flash){log('У вас нет фонаря');return;}
+ if(!P.flashOn&&!(P.flashBat>0)){log(P.inv.oil?'Фонарь пустой — заправьте его керосином (инвентарь)':'В фонаре нет керосина','bad');return;}
+ P.flashOn=!P.flashOn;SFX.thud&&SFX.thud();}
+// поза «фонарь перед собой»: после анимации доворачиваем правую руку вперёд (плечо и предплечье), чтобы лампа была видна и светила по ходу
+const _lq=new THREE.Quaternion(),_lq2=new THREE.Quaternion(),_lv1=new THREE.Vector3(),_lv2=new THREE.Vector3(),_lv3=new THREE.Vector3();
+function aimBone(b,child,dirWorld,k){b.getWorldPosition(_lv1);child.getWorldPosition(_lv2);_lv2.sub(_lv1).normalize();
+ _lq.setFromUnitVectors(_lv2,dirWorld);b.parent.getWorldQuaternion(_lq2);const wq=b.getWorldQuaternion(new THREE.Quaternion());
+ const tq=_lq2.clone().invert().multiply(_lq).multiply(wq);b.quaternion.slerp(tq,k);b.updateMatrixWorld(true);}
+let lanternK=0;
+function lanternPose(dt){const want=P.flashOn&&!ST&&!G.pose&&!P.climb&&P.torch<=0&&!G.over?1:0;lanternK+=(want-lanternK)*Math.min(1,dt*6);if(lanternK<.01)return;
+ const sh=hero.getObjectByName('mixamorigRightArm'),fa=hero.getObjectByName('mixamorigRightForeArm'),hd=hero.getObjectByName('mixamorigRightHand');if(!sh||!fa||!hd)return;
+ hero.updateMatrixWorld(true);const fw=_lv3.set(Math.sin(P.a),0,Math.cos(P.a));
+ aimBone(sh,fa,new THREE.Vector3(fw.x*.75-Math.cos(P.a)*.0,-.62,fw.z*.75).normalize(),lanternK);
+ aimBone(fa,hd,new THREE.Vector3(fw.x,-.12,fw.z).normalize(),lanternK);}const _fv=new THREE.Vector3();
 function clipSpeed(g,clip,hs){ // скорость «земли» в анимации на месте (м/с): как быстро опорная стопа едет назад
  const root=THREE.SkeletonUtils.clone(g.scene);root.scale.setScalar(hs);const mx=new THREE.AnimationMixer(root);mx.clipAction(clip).play();
  let foot=null;root.traverse(o=>{if(!foot&&/LeftFoot$/i.test(o.name))foot=o;});if(!foot)return 0;
@@ -1599,11 +1781,20 @@ function makeHero(){
  flameMesh.position.set(.3,1.05,.32);flameMesh.visible=false;hero.add(flameMesh);
  // фонарик: корпус каждый кадр ставится к кисти правой руки, луч (SpotLight) бьёт вперёд по взгляду героя
  hero.traverse(o=>{if(o.isBone&&/hand/i.test(o.name)&&/right|_r$|\.r$|r_/i.test(o.name)&&!/thumb|index|middle|ring|pinky/i.test(o.name)&&!flashHand)flashHand=o;});
- flashMesh=new THREE.Group();const fb=new THREE.Mesh(new THREE.CylinderGeometry(.03,.025,.2,10),new THREE.MeshStandardMaterial({color:0x2b2f33,roughness:.5,metalness:.6}));fb.rotation.x=Math.PI/2;flashMesh.add(fb);
- const fh=new THREE.Mesh(new THREE.CylinderGeometry(.042,.032,.06,10),new THREE.MeshStandardMaterial({color:0x3a3f44,roughness:.4,metalness:.7}));fh.rotation.x=Math.PI/2;fh.position.z=.12;flashMesh.add(fh);
- flashLens=new THREE.Mesh(new THREE.CircleGeometry(.036,12),new THREE.MeshBasicMaterial({color:0x333333}));flashLens.position.z=.151;flashMesh.add(flashLens);
- flashMesh.visible=false;hero.add(flashMesh);
- flashLight=new THREE.SpotLight(0xfff2d8,0,26,.42,.45,1.3);flashLight.castShadow=false;hero.add(flashLight);hero.add(flashLight.target);
+ // ТЗ 8.5: керосиновый фонарь «летучая мышь» (процедурный): дужка в кулаке, ниже — колпак, стекло с огоньком, бак.
+ // Начало координат группы — точка хвата (кисть), фонарь висит под ней
+ flashMesh=new THREE.Group();{const tin=new THREE.MeshStandardMaterial({color:0x6b6f5e,roughness:.55,metalness:.55}),dark=new THREE.MeshStandardMaterial({color:0x2c2d2a,roughness:.6,metalness:.5});
+  const ring=new THREE.Mesh(new THREE.TorusGeometry(.045,.006,5,14),dark);ring.position.y=-.03;flashMesh.add(ring);
+  const cap=new THREE.Mesh(new THREE.ConeGeometry(.055,.05,10),tin);cap.position.y=-.1;flashMesh.add(cap);
+  const top=new THREE.Mesh(new THREE.CylinderGeometry(.058,.058,.012,12),tin);top.position.y=-.128;flashMesh.add(top);
+  flashLens=new THREE.Mesh(new THREE.SphereGeometry(.05,12,10),new THREE.MeshStandardMaterial({color:0xbfc6c2,roughness:.15,metalness:0,transparent:true,opacity:.45,emissive:0x000000}));flashLens.scale.y=1.25;flashLens.position.y=-.195;flashMesh.add(flashLens);
+  const fl=new THREE.Mesh(new THREE.ConeGeometry(.012,.04,6),new THREE.MeshBasicMaterial({color:0xffc060}));fl.position.y=-.2;fl.name='flame';flashMesh.add(fl);
+  for(const s of[-1,1]){const w=new THREE.Mesh(new THREE.CylinderGeometry(.004,.004,.15,4),dark);w.position.set(s*.058,-.2,0);flashMesh.add(w);}
+  const tank=new THREE.Mesh(new THREE.CylinderGeometry(.06,.065,.05,12),tin);tank.position.y=-.285;flashMesh.add(tank);}
+ flashMesh.scale.setScalar(1.35);flashMesh.visible=false;hero.add(flashMesh);
+ // свет — направленный конус из фонаря вперёд по взгляду (тёплый, как от керосина), плюс совсем слабый ореол у самой лампы (радиус 2,5 м)
+ flashLight=new THREE.SpotLight(0xffc47a,0,22,.62,.6,1.4);flashLight.castShadow=false;hero.add(flashLight);hero.add(flashLight.target);
+ flashGlow=new THREE.PointLight(0xffb060,0,2.5,2);hero.add(flashGlow);
  gearInit();
 }
 // ---------- видимая одежда героя ----------
@@ -1719,9 +1910,11 @@ const day=()=>Math.floor(G.min/1440)+1;
 function darkness(){const h=hour();let d;if(h>=8&&h<17)d=0;else if(h>=17&&h<20)d=(h-17)/3;else if(h>=5&&h<8)d=1-(h-5)/3;else d=1;return d;}
 function nearFire(x,z,r){return objs.some(o=>o.kind==='fire'&&dist(x,z,o.x,o.z)<r);}
 // ---------- одежда ----------
-const condF=c=>.45+.55*c/100; // изношенная вещь греет хуже
-function clothWarm(){let s=2;for(const k in P.worn){const w=P.worn[k];s+=ITEMS[w.id].t*condF(w.c)+(w.fur?1.5:0);}return s;} // 2° — собственное тепло тела
-function windProof(){let s=0;for(const[k,,wt]of SLOTS){const w=P.worn[k];if(w)s+=wt*ITEMS[w.id].wp*(.5+.5*w.c/100);}return s;}
+// ТЗ 7.3: эффективность вещи пропорциональна состоянию: износ 25% → 75% тепла и защиты от ветра, 100% → 0.
+// Базовые значения (ITEMS[id].t, .wp) не меняются — итог считается на лету
+const condF=c=>clamp(c,0,100)/100;
+function clothWarm(){let s=2;for(const k in P.worn){const w=P.worn[k];s+=(ITEMS[w.id].t+(w.fur?1.5:0))*condF(w.c);}return s;} // 2° — собственное тепло тела
+function windProof(){let s=0;for(const[k,,wt]of SLOTS){const w=P.worn[k];if(w)s+=wt*ITEMS[w.id].wp*condF(w.c);}return s;}
 function wearOut(amt,slots){for(const k of slots||Object.keys(P.worn)){const w=P.worn[k];if(w)w.c=Math.max(0,w.c-amt);}}
 // ---------- температура ----------
 // воздух: днём около −3…−5°, ночью до −15°; ясная ночь холоднее; каждый день чуть холоднее
@@ -1785,7 +1978,7 @@ function updateWeather(m){
 function updateWorld(m,opt={}){
  updateStats(m,opt.sleep,opt.bed);updateFires(m);updateWeather(m);updateRooms(m);
  if(P.torch>0){P.torch=Math.max(0,P.torch-m);if(P.torch===0)log('Факел погас');}
- if(P.flashOn){P.flashBat=Math.max(0,(P.flashBat||0)-m);if(P.flashBat===0){P.flashOn=false;log('Батарейки фонарика сели','bad');}}
+ if(P.flashOn){P.flashBat=Math.max(0,(P.flashBat||0)-m);if(P.flashBat===0){P.flashOn=false;log('Керосин кончился — фонарь погас','bad');}}
  {const h=hour();if(h>=17&&h<18&&G.duskDay!==day()&&!opt.sleep){G.duskDay=day();log('Смеркается. Ночью мороз крепче, а волки смелее — пора к укрытию.','bad');}}
  if(day()>G.restockDay){G.restockDay=day();for(const o of objs)if(o.kind==='hole'&&o.fish<o.max)o.fish++;} // рыба в лунках понемногу возвращается
  G.spawnT-=m;if(G.spawnT<=0){G.spawnT=180;while(rabbits.length<26){const[x,z]=randomSpot((x,z)=>dist(x,z,P.x,P.z)>40&&!inLake(x,z));rabbits.push(makeRabbit(x,z));}}
@@ -1830,7 +2023,7 @@ const AFF={hypo:['Переохлаждение','Тепло уходит быс�
 const cacheSearched=id=>objs.some(o=>o.kind==='box'&&o.b&&o.b.id===id&&o.searched);
 const QUESTS=[
  {t:'осмотрите кабину разбитого самолёта',done:()=>cacheSearched('plane')},
- {t:'найдите сумку пилота рядом с обломками',done:()=>!!P.inv.flash},
+ {t:'найдите сумку пилота рядом с обломками',done:()=>cacheSearched('plane2')},
  {t:'стемнеет быстро: доберитесь до хижины у берега озера',done:()=>P.inB&&SHELTER&&P.inB===SHELTER.b||!!P.inB},
  {t:'растопите печь (E у печи)',done:()=>objs.some(o=>o.kind==='fire'&&o.stove)},
  {t:'запаситесь едой и водой (минимум по одной)',done:()=>Object.keys(P.inv).some(k=>ITEMS[k].cat==='food'&&k!=='water_raw'&&k!=='water')&&!!(P.inv.water||P.inv.water_raw)},
@@ -1840,7 +2033,7 @@ const QUESTS=[
  {t:'продержитесь до прилёта вертолёта',done:()=>false}];
 // подробности к каждому заданию — показываются только в журнале (J), а не в ленте сообщений
 const QHINT=['Вы пришли в себя у обломков. Пилота нигде нет. Кабина рядом — подойдите и нажмите E.',
- 'Сумка пилота лежит в снегу у обломков. В ней фонарик (L) и батарейки.',
+ 'Сумка пилота лежит в снегу у обломков. Керосиновый фонарь (L) ищите в первой хижине; керосин иногда попадается в домах.',
  'Хижина у берега отмечена на карте (M). Ночью на улице долго не продержаться.',
  'Подойдите к печи и нажмите E. Нужны спички и растопка: газета или палка.',
  'Ищите в ящиках и шкафах. Талую воду кипятите в котелке на огне.',
@@ -1857,7 +2050,7 @@ function updateHUD(){
  const ti=tempInfo(),h=hour();
  let html=`<b>День ${day()} · ${fmt2(Math.floor(h))}:${fmt2(Math.floor(G.min%60))}</b><br>${WEATHER[WX.state].n}${P.inB?` · внутри ${fmtT(P.inB.temp)}`:inCave(P.x,P.z)?' · укрытие':''}<br><span class="dim">Ощущается</span> <b style="font-size:13px;color:${ti.felt<0?'#9fd0ff':'#ffc58a'}">${fmtT(ti.felt)}</b>`;
  if(P.torch>0)html+=`<br>Факел: ${fmtDur(P.torch)}`;
- if(P.inv&&P.inv.flash)html+=`<br><span class="dim">Фонарик${P.flashOn?' · вкл':''}:</span> ${fmtDur(P.flashBat||0)}`;
+ if(P.inv&&P.inv.flash)html+=`<br><span class="dim">Фонарь${P.flashOn?' · горит':''}:</span> ${(P.flashBat||0)>0?'керосин на '+fmtDur(P.flashBat):'пустой'}`;
  {const Q=questNow();html+=`<br><span style="color:#ffcf6a">Цель ${Q.i+1}/${QUESTS.length}:</span> <span style="font-size:12px">${Q.t}</span>`;}
  if(G.rescueAt)html+=G.min<G.rescueAt?`<br><span style="color:#b9f0a0">Спасатели через ${fmtDur(G.rescueAt-G.min)}</span>`:`<br><span style="color:#b9f0a0">Вертолёт ждёт у поста!</span>`;
  document.getElementById('clock').innerHTML=html;
@@ -1950,7 +2143,7 @@ function renderWornDetail(det){
  const w=P.worn[INV.worn];if(!w){INV.worn=null;renderInv();return;}
  const it=ITEMS[w.id],canFix=P.inv.sew&&P.inv.rag&&w.c<100,canFur=P.inv.sew&&(P.inv.pelt||0)>=2&&!w.fur;
  det.innerHTML=`<div class="big"><div class="ic" style="${iconCss(w.id,102)}"></div></div><h3>${it.n}</h3><div class="cat">Надето · ${SLOTS.find(s=>s[0]===INV.worn)[1]}</div>
-  <p>${it.d}</p><div class="fx"><span class="p">Тепло +${(it.t*condF(w.c)+(w.fur?1.5:0)).toFixed(1)}° из ${it.t+(w.fur?1.5:0)}°</span><span class="p">Ветер −${Math.round(it.wp*100)}%</span><span style="color:${condCol(w.c)}">Состояние ${Math.round(w.c)}%</span>${w.fur?'<span class="p">Меховая подкладка</span>':''}</div>
+  <p>${it.d}</p><div class="fx"><span class="p">Тепло +${((it.t+(w.fur?1.5:0))*condF(w.c)).toFixed(1)}° из ${it.t+(w.fur?1.5:0)}°</span><span class="p">Ветер −${Math.round(it.wp*condF(w.c)*100)}% из ${Math.round(it.wp*100)}%</span><span style="color:${condCol(w.c)}">Состояние ${Math.round(w.c)}%</span>${w.fur?'<span class="p">Меховая подкладка</span>':''}</div>
   <div class="acts"><button class="pri" data-a="fix"${canFix?'':' disabled'}>Починить: +35% · 30 мин <small>(швейный набор + ткань)</small></button>
   <button data-a="fur"${canFur?'':' disabled'}>Подшить мехом: +1,5° · 1 ч <small>(набор + 2 шкурки)</small></button>
   <button data-a="unwear">Снять</button></div>`;
@@ -2008,7 +2201,7 @@ function useItem(id){
  const it=ITEMS[id],u=it.use;if(!u||!P.inv[id])return;
  if(it.s){wear(id);return;}
  if(u.kc||u.water)playOnce('drink'); // поднести ко рту: еда и питьё
- if(id==='cells'){if(!P.inv.flash){log('Сначала найдите фонарик','bad');return;}take(id);P.flashBat=240;log('Новые батарейки: фонарик заряжен на 4 часа','good');return;}
+ if(id==='oil'){if(!P.inv.flash){log('Сначала найдите фонарь','bad');return;}if((P.flashBat||0)>=299){log('Бак фонаря и так полон');return;}take(id);P.flashBat=Math.min(300,(P.flashBat||0)+150);log(`Фонарь заправлен: керосина на ${fmtDur(P.flashBat)}`,'good');return;}
  // еда съедается не целиком, если столько не нужно: остаток остаётся в рюкзаке («начато, осталось N ккал»)
  if(u.kc>=150){P.left=P.left||{};const fr=P.left[id]||1,avail=u.kc*fr,need=(100-P.food)/100*KCAL;
   if(need<20){log('Вы сыты');return;}
@@ -2061,27 +2254,58 @@ function doSleep(min,bed){const f=document.getElementById('fade');G.pose='sleep'
  setTimeout(()=>{const r=passTime(min,{sleep:true,bed});f.style.opacity=0;setTimeout(()=>{f.style.transition='';G.pose=null;if(!G.over)playOnce('getup');},700);if(!G.over){log(r||'Вы проснулись',r&&r.includes('!')?'bad':'');saveGame();}},1500);}
 // ---------- карта ----------
 let mapBase=null;
+// ТЗ 4: карта выжившего. Выбор технологии: рисуем canvas 2D прямо из данных мира (рельеф H, озеро, река, дороги, гряда, деревья,
+// здания) — без внешних картинок: география всегда совпадает с игрой, весит 0 КБ, строится один раз (~0,3 с) и потом лишь масштабируется.
+// Стиль — старая топографическая карта, раскрашенная от руки: бумага с пятнами, отмывка рельефа, горизонтали, штрихи склонов,
+// ёлочки леса, синяя вода со штрихами берега, двойные дороги, железная дорога со шпалами, компас, масштаб и картуш с названием
 function buildMapBase(){
- const c=document.createElement('canvas');c.width=c.height=300;const x=c.getContext('2d'),img=x.createImageData(300,300);
- for(let j=0;j<300;j++)for(let i=0;i<300;i++){const wx=(i/300*2-1)*REG,wz=(j/300*2-1)*REG,h=H(wx,wz),k=(j*300+i)*4;let r=232,g=226,b=208;
-  if(inLake(wx,wz)){r=150;g=180;b=196;}else{const s=clamp(h*3,-20,60);r-=s*.5;g-=s*.55;b-=s*.5;if(h>9){r=176;g=172;b=164;}
-   const sh=(H(wx-2.5,wz-2.5)-H(wx+2.5,wz+2.5))*7;r+=sh;g+=sh;b+=sh*.9;           // отмывка рельефа
-   if(Math.floor(h/1.6)!==Math.floor(H(wx+1.2,wz)/1.6)){r-=22;g-=22;b-=18;}}      // горизонтали
-  if(Math.hypot(wx,wz)>REG-4){r*=.6;g*=.6;b*=.6;}img.data[k]=r;img.data[k+1]=g;img.data[k+2]=b;img.data[k+3]=255;}
- x.putImageData(img,0,0);
- for(const t of trees)if(rnd()<.6){const px=(t.x/REG+1)*150,py=(t.z/REG+1)*150;x.fillStyle=burnMask(t.x,t.z)>.5?'rgba(40,35,30,.5)':'rgba(60,80,60,.45)';x.fillRect(px-1,py-1,2,2);}
- // река, дороги и тропы
- const line=(L,w,col,dash)=>{x.strokeStyle=col;x.lineWidth=w;x.setLineDash(dash||[]);x.lineJoin='round';x.beginPath();L.pts.forEach(([wx,wz],i)=>{const px=(wx/REG+1)*150,py=(wz/REG+1)*150;i?x.lineTo(px,py):x.moveTo(px,py);});x.stroke();x.setLineDash([]);};
- line(RIVER,RIVER_E*2/REG*150,'rgb(150,180,196)');
- for(const R of ROADS)line(R.L,R.trail?1:1.6,R.trail?'#7a5a3e':'#8b6b4a',R.trail?[2,2]:null);
- // Каменная гряда: гребень со штриховкой склонов, разрыв на перевале
- {const rp=RIDGE.pts,m=(wx,wz)=>[(wx/REG+1)*150,(wz/REG+1)*150];x.strokeStyle='rgba(80,76,72,.8)';x.lineWidth=1;
-  rp.forEach(([wx,wz],i)=>{if(dist(wx,wz,PASS.x,PASS.z)<9)return;const a=rp[Math.max(0,i-1)],b=rp[Math.min(rp.length-1,i+1)],l=Math.hypot(b[0]-a[0],b[1]-a[1])||1,nx=-(b[1]-a[1])/l,nz=(b[0]-a[0])/l,[px,py]=m(wx,wz);
-   for(const s of[-1,1]){x.beginPath();x.moveTo(px,py);x.lineTo(px+nx*s*5,py+nz*s*5);x.stroke();}});
-  x.lineWidth=2.6;x.strokeStyle='rgba(70,66,62,.9)';x.beginPath();let pen=false;
-  for(const[wx,wz]of rp){const[px,py]=m(wx,wz);if(dist(wx,wz,PASS.x,PASS.z)<9){pen=false;continue;}pen?x.lineTo(px,py):x.moveTo(px,py);pen=true;}x.stroke();}
- x.strokeStyle='#5a4636';x.lineWidth=2;x.setLineDash([4,3]);x.beginPath();x.moveTo(0,(RAIL_Z/REG+1)*150);x.lineTo(300,(RAIL_Z/REG+1)*150);x.stroke();x.setLineDash([]);
- for(const b of buildings){x.fillStyle='#7a4a2a';x.fillRect((b.x0/REG+1)*150,(b.z0/REG+1)*150,Math.max(2,(b.x1-b.x0)/REG*150),Math.max(2,(b.z1-b.z0)/REG*150));}
+ const N=600,R=300,M=(wx,wz)=>[(wx/REG+1)*R,(wz/REG+1)*R],c=document.createElement('canvas');c.width=c.height=N;const x=c.getContext('2d');
+ // 1) рельеф: растр 300×300 с отмывкой и горизонталями, растянутый мягко
+ {const T=300,t=document.createElement('canvas');t.width=t.height=T;const tx=t.getContext('2d'),img=tx.createImageData(T,T);
+  for(let j=0;j<T;j++)for(let i=0;i<T;i++){const wx=(i/T*2-1)*REG,wz=(j/T*2-1)*REG,h=H(wx,wz),k=(j*T+i)*4;let r=236,g=228,b=206;
+   if(inLake(wx,wz)){const d=-lakeDist(wx,wz);const deep=clamp(d/18,0,1);r=lerp(178,132,deep);g=lerp(204,170,deep);b=lerp(214,196,deep);}
+   else{const s=clamp(h*2.6,-20,60);r-=s*.45;g-=s*.5;b-=s*.55;if(h>9){r=184;g=176;b=164;}
+    const sh=(H(wx-2.5,wz-2.5)-H(wx+2.5,wz+2.5))*8;r+=sh;g+=sh;b+=sh*.85;
+    if(Math.floor(h/1.6)!==Math.floor(H(wx+1.2,wz)/1.6)||Math.floor(h/1.6)!==Math.floor(H(wx,wz+1.2)/1.6)){const major=Math.floor(h/1.6)%5===0;r-=major?40:20;g-=major?42:21;b-=major?40:18;}}
+   const n=(hash2(i,j)-.5)*10;img.data[k]=r+n;img.data[k+1]=g+n;img.data[k+2]=b+n;img.data[k+3]=255;}
+  tx.putImageData(img,0,0);x.imageSmoothingEnabled=true;x.drawImage(t,0,0,N,N);}
+ // 2) бумага: пятна, потёртости
+ for(let i=0;i<60;i++){const px=Math.random()*N,py=Math.random()*N,r=20+Math.random()*80,g=x.createRadialGradient(px,py,0,px,py,r);g.addColorStop(0,`rgba(140,110,70,${Math.random()*.06})`);g.addColorStop(1,'rgba(140,110,70,0)');x.fillStyle=g;x.fillRect(px-r,py-r,r*2,r*2);}
+ // 3) лес: ёлочки (густо там, где деревья; горелый лес — серые сухие стволы)
+ const seen=new Set();for(const t of trees){const[px,py]=M(t.x,t.z),key=Math.round(px/5)+','+Math.round(py/5);if(seen.has(key))continue;seen.add(key);
+  const burnt=burnMask(t.x,t.z)>.5,s=2.6+hash2(t.x*3,t.z*7)*1.4;
+  if(burnt){x.strokeStyle='rgba(70,62,55,.6)';x.lineWidth=.8;x.beginPath();x.moveTo(px,py+s);x.lineTo(px,py-s);x.moveTo(px-s*.5,py-s*.2);x.lineTo(px+s*.5,py-s*.6);x.stroke();}
+  else{x.fillStyle='rgba(58,86,64,.62)';x.beginPath();x.moveTo(px,py-s*1.3);x.lineTo(px+s*.75,py+s*.6);x.lineTo(px-s*.75,py+s*.6);x.closePath();x.fill();x.fillStyle='rgba(40,60,45,.5)';x.fillRect(px-.4,py+s*.6,.8,s*.4);}}
+ // 4) озеро: штрихи вдоль берега (как на старых картах), «лёд» — редкие трещины, подпись
+ x.strokeStyle='rgba(70,110,140,.55)';for(let ring=0;ring<4;ring++){x.lineWidth=ring?.6:1.6;x.beginPath();for(let a=0;a<=TAU+.01;a+=.03){const r=lakeR(a)-ring*1.6;const[px,py]=M(LAKE.x+Math.cos(a)*r,LAKE.z+Math.sin(a)*r);a?x.lineTo(px,py):x.moveTo(px,py);}x.stroke();}
+ x.strokeStyle='rgba(255,255,255,.55)';x.lineWidth=.7;for(let i=0;i<18;i++){let a=Math.random()*TAU,r=Math.random()*lakeR(a)*.75,[px,py]=M(LAKE.x+Math.cos(a)*r,LAKE.z+Math.sin(a)*r);x.beginPath();x.moveTo(px,py);for(let s=0;s<4;s++){px+=(Math.random()-.5)*14;py+=(Math.random()-.5)*14;x.lineTo(px,py);}x.stroke();}
+ // 5) река: берега и вода
+ const path=(L,f)=>{x.beginPath();L.pts.forEach(([wx,wz],i)=>{const[px,py]=M(wx,wz);i?x.lineTo(px,py):x.moveTo(px,py);});f();};
+ x.lineJoin=x.lineCap='round';path(RIVER,()=>{x.strokeStyle='rgba(70,110,140,.8)';x.lineWidth=RIVER_E*2/REG*R+2.5;x.stroke();x.strokeStyle='rgb(176,204,216)';x.lineWidth=RIVER_E*2/REG*R;x.stroke();});
+ // 6) гряда: гребень и штрихи склонов, разрыв на перевале
+ {const rp=RIDGE.pts;x.strokeStyle='rgba(80,72,64,.75)';x.lineWidth=.9;
+  rp.forEach(([wx,wz],i)=>{if(dist(wx,wz,PASS.x,PASS.z)<9)return;const a=rp[Math.max(0,i-1)],b=rp[Math.min(rp.length-1,i+1)],l=Math.hypot(b[0]-a[0],b[1]-a[1])||1,nx=-(b[1]-a[1])/l,nz=(b[0]-a[0])/l,[px,py]=M(wx,wz);
+   for(const s of[-1,1])for(let q=0;q<2;q++){const o=(q-.5)*3;x.beginPath();x.moveTo(px+nz*o,py-nx*o);x.lineTo(px+nx*s*9+nz*o,py+nz*s*9-nx*o);x.stroke();}});
+  x.lineWidth=3;x.strokeStyle='rgba(66,58,52,.95)';x.beginPath();let pen=false;for(const[wx,wz]of rp){const[px,py]=M(wx,wz);if(dist(wx,wz,PASS.x,PASS.z)<9){pen=false;continue;}pen?x.lineTo(px,py):x.moveTo(px,py);pen=true;}x.stroke();}
+ // 7) дороги — двойная линия, тропы — пунктир
+ for(const Rd of ROADS){if(Rd.trail)path(Rd.L,()=>{x.setLineDash([3,3]);x.strokeStyle='#7a5a3e';x.lineWidth=1.3;x.stroke();x.setLineDash([]);});
+  else path(Rd.L,()=>{x.strokeStyle='#6a4a30';x.lineWidth=4.2;x.stroke();x.strokeStyle='#e6d6b4';x.lineWidth=2.4;x.stroke();});}
+ // 8) железная дорога: чёрно-белая полоса со шпалами
+ {const y=M(0,RAIL_Z)[1];x.strokeStyle='#2a2420';x.lineWidth=3.4;x.beginPath();x.moveTo(0,y);x.lineTo(N,y);x.stroke();x.strokeStyle='#f2ead6';x.lineWidth=1.6;x.setLineDash([7,7]);x.beginPath();x.moveTo(0,y);x.lineTo(N,y);x.stroke();x.setLineDash([]);
+  x.strokeStyle='#2a2420';x.lineWidth=1;for(let px=0;px<N;px+=7){x.beginPath();x.moveTo(px,y-3.5);x.lineTo(px,y+3.5);x.stroke();}}
+ // 9) постройки: тёмные прямоугольники с тенью
+ for(const b of buildings){const[a0,b0]=M(b.x0,b.z0),[a1,b1]=M(b.x1,b.z1);x.fillStyle='rgba(0,0,0,.25)';x.fillRect(a0+1.2,b0+1.2,Math.max(3,a1-a0),Math.max(3,b1-b0));x.fillStyle='#5a3a24';x.fillRect(a0,b0,Math.max(3,a1-a0),Math.max(3,b1-b0));}
+ // 10) край карты: виньетка, рамка, компас, масштаб, картуш
+ {const g=x.createRadialGradient(R,R,R*.75,R,R,R*1.45);g.addColorStop(0,'rgba(60,40,20,0)');g.addColorStop(1,'rgba(60,40,20,.45)');x.fillStyle=g;x.fillRect(0,0,N,N);}
+ x.strokeStyle='#4a3424';x.lineWidth=3;x.strokeRect(5,5,N-10,N-10);x.lineWidth=1;x.strokeRect(10,10,N-20,N-20);
+ {const cx=N-58,cy=N-62;x.save();x.translate(cx,cy);x.fillStyle='rgba(245,236,214,.85)';x.beginPath();x.arc(0,0,30,0,TAU);x.fill();x.strokeStyle='#4a3424';x.lineWidth=1.2;x.stroke();
+  for(let i=0;i<4;i++){x.rotate(Math.PI/2);x.fillStyle=i===3?'#9c3328':'#4a3424';x.beginPath();x.moveTo(0,-26);x.lineTo(5,0);x.lineTo(-5,0);x.closePath();x.fill();}
+  x.fillStyle='#4a3424';x.font='bold 12px Georgia,serif';x.textAlign='center';x.fillText('С',0,-30-2);x.restore();}
+ {const px=24,py=N-28,L=20/REG*R*2;x.fillStyle='#4a3424';x.fillRect(px,py,L,3);x.fillStyle='#f2ead6';x.fillRect(px+L/2,py,L/2,3);x.strokeStyle='#4a3424';x.strokeRect(px,py,L,3);
+  x.font='10px Georgia,serif';x.textAlign='left';x.fillText('40 м',px+L+5,py+4);}
+ {x.fillStyle='rgba(245,236,214,.9)';x.fillRect(18,18,196,46);x.strokeStyle='#4a3424';x.lineWidth=1.4;x.strokeRect(18,18,196,46);x.strokeRect(21,21,190,40);
+  x.fillStyle='#3b2618';x.font='bold 20px Georgia,serif';x.textAlign='center';x.fillText('ТИХОЕ ОЗЕРО',116,43);x.font='italic 10px Georgia,serif';x.fillText('карта выжившего · масштаб примерный',116,56);}
+ {const p=linePt(RIVER,.55),[px,py]=M(p.x,p.z);x.save();x.translate(px+10,py);x.rotate(1.2);x.font='italic 11px Georgia,serif';x.fillStyle='rgba(50,80,105,.85)';x.fillText('р. Каменка',0,0);x.restore();}
  mapBase=c;
 }
 // знак места: тип открывается, когда герой увидел место (подошёл ближе ~38 м) или побывал там
@@ -2100,6 +2324,11 @@ const MARK={
  car:{c:'#6a7f88',t:'Брошенный пикап',i:'▣'},
  bridge:{c:'#7a6a5a',t:'Мост над ущельем',i:'═'},
  pass:{c:'#7a6a5a',t:'Перевал: единственный путь через Каменную гряду',i:'⋀'},
+ house:{c:'#5a9a4a',t:'Жилой дом: одежда и припасы',i:'⌂'},
+ barrack:{c:'#d9822b',t:'Барак лесорубов: много коек и запасов',i:'▤'},
+ store:{c:'#8a6a3a',t:'Склад: дрова, уголь, тряпьё',i:'▦'},
+ bath:{c:'#5a9a4a',t:'Баня: печь, тесно, но тепло',i:'♨'},
+ shed:{c:'#8a6a3a',t:'Сарай: дрова и хлам',i:'▭'},
 };
 const MZ={z:1};
 function openMap(){menuOpts=[];menuKind='map';MZ.z=1;document.getElementById('map').hidden=false;drawMap();}
@@ -2133,6 +2362,10 @@ function drawMap(){
   x.beginPath();x.arc(px,py,8/z,0,TAU);x.fillStyle=m.c;x.fill();x.lineWidth=2/z;x.strokeStyle='#fff';x.stroke();
   x.fillStyle='#fff';x.font=fs(11);x.fillText(m.i,px,py+4/z);
   if(!ZONES.some(zn=>zn.name===p.name)){x.font=fs(10);x.fillStyle='#3b2618';x.fillText(p.name,px,py+19/z);}} // у мест со своей зоной название уже подписано
+ // тонкий лёд, о котором герой уже знает: красная штриховка
+ for(const t of THIN){if(!(G.thinSeen&&G.thinSeen.has(t.n)))continue;const px=(t.x/REG+1)*300,py=(t.z/REG+1)*300,r=t.r/REG*300;x.save();x.beginPath();x.arc(px,py,r,0,TAU);x.clip();
+  x.strokeStyle='rgba(180,40,30,.8)';x.lineWidth=1.2/z;for(let k=-r;k<r;k+=3/z){x.beginPath();x.moveTo(px+k-r,py-r);x.lineTo(px+k+r,py+r);x.stroke();}x.restore();
+  x.beginPath();x.arc(px,py,r,0,TAU);x.strokeStyle='rgba(180,40,30,.9)';x.lineWidth=1.5/z;x.stroke();x.font=fs(9);x.fillStyle='#9c2a20';x.fillText('тонкий лёд',px,py+r+10/z);}
  const px=hx,py=hy;x.save();x.translate(px,py);x.rotate(-P.a);x.fillStyle='#d0402a';x.strokeStyle='#fff';x.lineWidth=2/z;x.beginPath();x.moveTo(0,10/z);x.lineTo(-7/z,-7/z);x.lineTo(7/z,-7/z);x.closePath();x.fill();x.stroke();x.restore();
  x.setTransform(1,0,0,1,0,0);
  x.fillStyle='#3b2618';x.font='bold 16px sans-serif';x.fillText('С',580,24);x.beginPath();x.moveTo(580,30);x.lineTo(576,40);x.lineTo(584,40);x.fill();
@@ -2145,7 +2378,9 @@ document.getElementById('map').addEventListener('wheel',e=>{e.preventDefault();M
 // =====================================================================
 function findTarget(){
  let best=null,bd=2.1;
- for(const o of objs){if(o.kind==='ash'||o.kind==='door'||(o.kind==='fire'&&o.stove))continue; // двери автоматическиеif(!!o.top!==!!P.onTower)continue; // на вышке доступен только спуск
+ for(const o of objs){if(o.kind==='ash'||o.kind==='door'||(o.kind==='fire'&&o.stove))continue; // двери автоматические
+  if(!!o.top!==!!P.onTower)continue; // на вышке доступен только спуск
+  if(o.fl!==undefined&&o.fl!==(P.flr|0))continue; // в двухэтажном доме — только предметы своего этажа
   const d=dist(o.x,o.z,P.x,P.z);if(d<bd){bd=d;best={o};}}
  if(best||P.onTower)return best;
  for(const t of trees){if(t.uses>=2)continue;const d=dist(t.x,t.z,P.x,P.z);if(d<1.7&&d<bd+.2){bd=d;best={tree:t};}}
@@ -2290,18 +2525,63 @@ function bleed(force){if(force||!P.bleed){if(!P.bleed)log('Кровотечен�
 function wolfBite(w){
  cancelSearch();SFX.bite();
  if(ST)return;
- if(w&&!G.over){closeMenu();ST={w,t:0,prog:0};strEl.style.display='block';strFill.style.width='0%';G.shake=.5;G.flash=.7;
+ if(w&&!G.over){closeMenu();ST={w,t:0,prog:0,bite:.6,torn:{}};strEl.style.display='block';strFill.style.width='0%';G.shake=.5;G.flash=.7;
   if(w.anim.acts.attack){w.anim.cur=null;play(w.anim,'attack',.05,true);}log('Волк повалил вас! Жмите E!','bad');return;}
  const d=(16+rnd()*12)*DIFF.wDmg;wearOut(rr(10,20));P.hp=clamp(P.hp-d);P.warm=clamp(P.warm-4);P.cause='wolf';G.flash=1;G.shake=.5;bleed();
  if(heroAnim.acts.hit){heroAnim.cur=null;play(heroAnim,'hit',.05,true);}
  if(P.hp<=0)die('wolf');
 }
+// ТЗ 7.2: повреждение конкретных надетых вещей (в процентах). Рвутся в первую очередь то, во что волк вцепился: руки, верх, ноги.
+// Снятые/отсутствующие слоты не трогаются. torn — счётчик за схватку (для сообщения)
+function tearCloth(amt,n,torn){const pref=['hands','outer','body','legs','feet','head','neck'].filter(k=>P.worn[k]);if(!pref.length)return;
+ for(let i=0;i<n;i++){const k=rnd()<.6?pref[0]:pick(pref),w=P.worn[k];const d=Math.min(w.c,amt*rr(.7,1.3));w.c=Math.max(0,w.c-d);if(torn)torn[k]=(torn[k]||0)+d;}}
+// =====================================================================
+//  ТЗ 5: ТОНКИЙ ЛЁД. Опасные места выбраны по «гидрологии», а не случайно:
+//  1) устье реки — течение подмывает лёд; 2) перекат реки ниже по течению; 3) родник подо льдом озера (вдали от лунок и рыбацких будок).
+//  Каждая зона — круг; вокруг остаётся безопасный лёд и берег, так что обходной путь есть всегда.
+// =====================================================================
+let THIN=[];
+function buildThinIce(){
+ for(const z of THIN)if(z.mesh)scene.remove(z.mesh);THIN=[];
+ const P0=RIVER.pts;let mouth=P0[0];for(const p of P0){if(lakeDist(p[0],p[1])>-1){mouth=p;break;}}
+ THIN.push({x:mouth[0],z:mouth[1],r:5.2,n:'устье реки'});
+ const rp=P0[Math.floor(P0.length*.3)];THIN.push({x:rp[0],z:rp[1],r:RIVER_E+.3,n:'перекат на реке'});
+ const a=1.4,R=lakeR(a)*.42;THIN.push({x:LAKE.x+Math.cos(a)*R,z:LAKE.z+Math.sin(a)*R,r:5,n:'родник подо льдом'});
+ // видимая опасность: тёмный «мокрый» лёд с белыми трещинами, края размыты
+ const cv=document.createElement('canvas');cv.width=cv.height=256;const x=cv.getContext('2d');const g=x.createRadialGradient(128,128,10,128,128,128);
+ g.addColorStop(0,'rgba(40,70,95,.55)');g.addColorStop(.6,'rgba(70,105,130,.35)');g.addColorStop(1,'rgba(120,150,170,0)');x.fillStyle=g;x.fillRect(0,0,256,256);
+ const rr2=(a,b)=>a+Math.random()*(b-a);x.strokeStyle='rgba(235,245,255,.85)';x.lineCap='round';
+ for(let i=0;i<9;i++){let px=128,py=128,ang=i/9*Math.PI*2+rr2(-.3,.3);x.lineWidth=rr2(1,2.4);x.beginPath();x.moveTo(px,py);for(let s=0;s<7;s++){ang+=rr2(-.5,.5);const L=rr2(8,18);px+=Math.cos(ang)*L;py+=Math.sin(ang)*L;x.lineTo(px,py);
+   if(Math.random()<.35){x.moveTo(px,py);x.lineTo(px+Math.cos(ang+1.2)*10,py+Math.sin(ang+1.2)*10);x.moveTo(px,py);}}x.stroke();}
+ const tex=new THREE.CanvasTexture(cv);tex.encoding=THREE.sRGBEncoding;
+ for(const z of THIN){const m=new THREE.Mesh(new THREE.PlaneGeometry(z.r*2.3,z.r*2.3),new THREE.MeshStandardMaterial({map:tex,transparent:true,depthWrite:false,roughness:.25,metalness:0,polygonOffset:true,polygonOffsetFactor:-2}));
+  m.rotation.x=-Math.PI/2;m.rotation.z=Math.random()*6;m.position.set(z.x,groundY(z.x,z.z)+.03,z.z);m.receiveShadow=true;scene.add(m);z.mesh=m;}
+}
+function thinAt(x,z){let best=null,bd=1e9;for(const t of THIN){const d=dist(x,z,t.x,t.z)-t.r;if(d<bd){bd=d;best=t;}}return[bd,best];}
+// реакция: за 4 м до края — треск и предупреждение; на тонком льду копится «нагрузка» (бег — вдвое быстрее, стоять — медленнее).
+// Через ~3 с лёд ломается: холодная вода, мокрая одежда; героя вытаскивает на ближайший прочный лёд
+function updateThinIce(dt){
+ if(!THIN.length||P.inB||P.onTower||P.climb){P.thin=0;return;}
+ const[d,z]=thinAt(P.x,P.z);G.iceCd=(G.iceCd||0)-dt;
+ if(d<4){if(!G.iceWarn){G.iceWarn=1;log('Осторожно! Тонкий лёд ('+z.n+')','bad');(G.thinSeen||(G.thinSeen=new Set())).add(z.n);}
+  const k=clamp(1-d/4,0,1);if(G.iceCd<=0){G.iceCd=d<0?rr(.25,.6):rr(1,2.2)*(1.2-k);SFX.ice&&SFX.ice(k);if(d<0)G.shake=Math.max(G.shake,.12);}}
+ else if(d>7)G.iceWarn=0;
+ if(d<0){P.thin=(P.thin||0)+dt*(P.sprinting?2:P.moving?1:.6);if(P.thin>3)breakIce(z);}else P.thin=Math.max(0,(P.thin||0)-dt*1.5);
+}
+function breakIce(z){P.thin=0;SFX.splash&&SFX.splash();G.flash=1;G.shake=.8;
+ P.warm=clamp(P.warm-45);P.hp=clamp(P.hp-8);P.cause='cold';wearOut(rr(4,8));
+ for(let i=0;i<8;i++)puff(P.x+rr(-.6,.6),groundY(P.x,P.z)+.2,P.z+rr(-.6,.6),.7,.8,.9,snowPuffMat);
+ const a=Math.atan2(P.z-z.z,P.x-z.x);P.x=z.x+Math.cos(a)*(z.r+1.8);P.z=z.z+Math.sin(a)*(z.r+1.8);
+ log('Лёд проломился! Вы выбрались из ледяной воды — срочно к огню!','bad');if(P.hp<=0)die('cold');}
 function endStruggle(ok){
- const w=ST.w;ST=null;strEl.style.display='none';w.state='flee';w.t=6;w.cool=25;
+ if(!ST)return; // повторный вызов не наносит урон второй раз
+ const w=ST.w,dur=ST.t,torn=ST.torn;ST=null;strEl.style.display='none';w.state='flee';w.t=6;w.cool=25;
  hero.rotation.x=0;hero.rotation.z=0;w.mesh.rotation.x=0;heroAnim.cur=null;play(heroAnim,'idle',.25); // без «сломанной» анимации удара
- wearOut(ok?rr(4,9):rr(12,22),['outer','legs','hands']); // волк рвёт одежду
- if(ok){P.hp=clamp(P.hp-5*DIFF.wDmg);P.cause='wolf';G.shake=.3;log('Вы отбились! Волк отскочил.','good');if(rnd()<.35)bleed();}
- else{P.hp=clamp(P.hp-(24+rnd()*10)*DIFF.wDmg);P.warm=clamp(P.warm-5);P.cause='wolf';G.flash=1;G.shake=.6;bleed(true);log('Волк искусал вас!','bad');}
+ // ТЗ 7.2: итоговый рывок волка: при поражении — сильнее и по всей одежде, при победе — слабее; чем дольше шла схватка, тем больше
+ tearCloth(ok?1+dur*1.2:6+dur*1.5,ok?1:3,torn);
+ if(ok){P.hp=clamp(P.hp-3*DIFF.wDmg);P.cause='wolf';G.shake=.3;log('Вы отбились! Волк отскочил.','good');if(rnd()<.25+dur*.05)bleed();}
+ else{P.hp=clamp(P.hp-(16+rnd()*8)*DIFF.wDmg);P.warm=clamp(P.warm-5);P.cause='wolf';G.flash=1;G.shake=.6;bleed(true);log('Волк искусал вас!','bad');}
+ const rep=Object.entries(torn).filter(([,v])=>v>=1).map(([k,v])=>`${ITEMS[P.worn[k]?P.worn[k].id:'rag']?.n||k} −${Math.round(v)}%`);if(rep.length)log('Одежда порвана: '+rep.join(', '),'bad');
  if(P.hp<=0)die('wolf');
 }
 
@@ -2329,8 +2609,14 @@ function update(dt){
   // анимация схватки: волк висит на герое и рвёт, герой отклоняется и отталкивает его (каждое E — толчок)
   {const w=ST.w,t=ST.t;ST.kick=Math.max(0,(ST.kick||0)-dt*4);
    const da=Math.atan2(w.x-P.x,w.z-P.z);P.a=da;
-   const lunge=.15*Math.max(0,Math.sin(t*9)),d=.95-lunge+ST.kick*.6,side=Math.sin(t*5.3)*.12;
-   w.x=P.x+Math.sin(da)*d+Math.cos(da)*side;w.z=P.z+Math.cos(da)*d-Math.sin(da)*side;w.a=da+Math.PI+Math.sin(t*7)*.25;
+   // ТЗ 7.1/7.2: укусы во время схватки — каждые ~0,75 с: немного здоровья и рвётся одна вещь.
+   // Чем лучше отбивается игрок (выше полоска), тем слабее укусы; укус пропускается сразу после толчка
+   ST.bite-=dt;if(ST.bite<=0){ST.bite=.75;if(ST.kick<.3){const k=1-Math.min(.7,ST.prog*.8);P.hp=clamp(P.hp-1.6*DIFF.wDmg*k);P.cause='wolf';tearCloth(2.2*k,1,ST.torn);G.flash=Math.max(G.flash,.55);SFX.bite&&SFX.bite();
+     puff(P.x+Math.sin(da)*.45,heightAt(P.x,P.z)+1.05,P.z+Math.cos(da)*.45,.25,.3,.5,bloodPuffMat);if(P.hp<=0){endStruggle(false);return;}}}
+   // волк держит героя за правую руку: морда тянется к предплечью, рывки головой; толчок E отбрасывает его на шаг
+   let gx=P.x+Math.sin(da)*.5,gz=P.z+Math.cos(da)*.5;{const fa=hero.getObjectByName('mixamorigRightForeArm');if(fa){fa.getWorldPosition(_fv);gx=_fv.x;gz=_fv.z;}}
+   const lunge=.15*Math.max(0,Math.sin(t*9)),side=Math.sin(t*5.3)*.1,reach=.72-lunge+ST.kick*.6;
+   w.x=gx+Math.sin(da)*reach+Math.cos(da)*side;w.z=gz+Math.cos(da)*reach-Math.sin(da)*side;w.a=Math.atan2(gx-w.x,gz-w.z)+Math.sin(t*11)*.18;
    if(w.anim.acts.attack&&!(w.anim.cur===w.anim.acts.attack&&w.anim.cur.isRunning())){w.anim.cur=null;play(w.anim,'attack',.05,true);}
    w.anim.mixer.update(dt);w.mesh.position.set(w.x,groundY(w.x,w.z)+.25*Math.max(0,Math.sin(t*9)),w.z);w.mesh.rotation.y=w.a;w.mesh.rotation.x=-.35-.15*Math.sin(t*9);
    hero.rotation.x=-.22-.08*Math.sin(t*9)+ST.kick*.5;hero.rotation.z=Math.sin(t*4.1)*.12;}
@@ -2339,6 +2625,10 @@ function update(dt){
  if(P.climb){updateClimb(dt);setHeroAnim(dt);return;}
  let mx=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0),mz=(keys.KeyS||keys.ArrowDown?1:0)-(keys.KeyW||keys.ArrowUp?1:0);
  if(window.JOY&&JOY.on){mx=JOY.x;mz=JOY.z;} // сенсорный джойстик: плавное направление вместо 8 рывков
+ // страховка: если окно закрыли «не тем» способом и состояние меню осталось, а на экране ничего нет — снимаем блокировку
+ if((menuOpts||menuKind)&&modal.hidden&&invEl.hidden&&document.getElementById('map').hidden&&findEl.hidden){menuOpts=null;menuKind='';}
+ if(G.pose){G.poseT=(G.poseT||0)+dt;if(G.poseT>10){G.pose=null;document.getElementById('fade').style.opacity=0;}}else G.poseT=0; // поза действия не может «зависнуть»
+ if(menuOpts||menuKind||G.pose)mx=mz=0; // ТЗ 9.1: пока открыт интерфейс/идёт действие, герой стоит; после закрытия управление сразу обычное
  const wgt=weight(),MW=maxW();P.moving=!!(mx||mz);
  // выносливость: бег быстро её съедает; запыхавшись, бежать нельзя, пока не отдышитесь. Усталость замедляет восстановление
  if(P.stam<=0)P.winded=true;else if(P.stam>=30)P.winded=false;
@@ -2346,7 +2636,9 @@ function update(dt){
  P.stam=clamp(P.stam+(P.sprinting?-9:(P.moving?4:7)*(.35+.65*P.rest/100))*dt);
  if(P.moving){
   const l=Math.hypot(mx,mz);mx/=l;mz/=l;
-  const ta=Math.atan2(mx,mz);let da=ta-P.a;while(da>Math.PI)da-=TAU;while(da<-Math.PI)da+=TAU;P.a+=da*Math.min(1,dt*12);
+  // ТЗ 9.2: поворот быстрее, а идёт герой туда, куда смотрит модель (на крутом развороте сначала довернётся, почти не двигаясь вбок)
+  const ta=Math.atan2(mx,mz);let da=ta-P.a;while(da>Math.PI)da-=TAU;while(da<-Math.PI)da+=TAU;P.a+=da*Math.min(1,dt*16);
+  {let r=ta-P.a;while(r>Math.PI)r-=TAU;while(r<-Math.PI)r+=TAU;const k=Math.max(.15,Math.cos(r));mx=Math.sin(P.a)*k;mz=Math.cos(P.a)*k;}
   const deep=!P.inB&&!P.onTower&&!inLake(P.x,P.z)&&fbm(P.x*.05+3,P.z*.05-8)>.6;
   let sp=2.5;if(deep)sp*=.65;if(wgt>MW)sp*=.55;if(P.rest<=0)sp*=.65;else if(P.rest<20)sp*=.85;if(P.aff.hypo)sp*=.85;if(P.sprinting)sp*=1.85;if(WX.state==='blizzard'&&!P.inB)sp*=.85;
   if(P.onTower){const tw=P.onTower,nx=P.x+mx*sp*.6*dt,nz=P.z+mz*sp*.6*dt,l2=tw.inv(nx,nz);if(Math.abs(l2.lx)<1.3&&Math.abs(l2.lz)<1.3){P.x=nx;P.z=nz;}}
@@ -2362,7 +2654,8 @@ function update(dt){
   }
  }
  {const was=P.inB;P.inB=P.onTower?null:buildingAt(P.x,P.z);if(P.inB&&P.inB!==was)saveGame();} // автосохранение у порога
- setHeroAnim(dt);updateSearch(dt);
+ P.flr=P.inB&&P.inB.floors===2&&P.yv!==undefined&&P.yv>P.inB.y+P.inB.H1*.5?1:0; // этаж: по высоте ног
+ setHeroAnim(dt);updateSearch(dt);updateThinIce(dt);
  G.saveT=(G.saveT||0)+dt;if(G.saveT>60){G.saveT=0;saveGame();}
  G.min+=dt*TIME_RATE;updateWorld(dt*TIME_RATE);if(G.over)return;
  // зоны и карта
@@ -2445,6 +2738,7 @@ function update(dt){
  for(let i=footsteps.length-1;i>=0;i--){const f=footsteps[i],age=G.min-f.t,max=WX.state==='blizzard'?40:300;if(age>max){scene.remove(f.m);footsteps.splice(i,1);}else f.m.scale.setScalar(1-age/max*.6);}
 }
 const snowPuffMat=new THREE.MeshStandardMaterial({roughness:1,metalness:0,color:0xffffff,transparent:true,opacity:.7,depthWrite:false});
+const bloodPuffMat=new THREE.MeshStandardMaterial({roughness:1,metalness:0,color:0x8a1010,transparent:true,opacity:.75,depthWrite:false});
 const breathMat=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.5,depthWrite:false});
 
 // =====================================================================
@@ -2452,21 +2746,33 @@ const breathMat=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opa
 // =====================================================================
 const camPos=new THREE.Vector3(),camLook=new THREE.Vector3();let camInit=false;
 const fogDay=new THREE.Color(0xdfe7ee),fogNight=new THREE.Color(0x0a1020),fogDusk=new THREE.Color(0x9a8fa8),fogStorm=new THREE.Color(0xc9d3dc),tmpC=new THREE.Color();
+// глубина снега под ногами, м: 0 — утоптано/лёд/пол; ~0,06 — обычный наст; до 0,24 — сугробы
+function snowDepth(x,z){
+ if(P.inB||P.onTower||buildingAt(x,z)||buildings.some(b=>b.porch&&x>b.porch.x0&&x<b.porch.x1&&z>b.porch.z0&&z<b.porch.z1)||inLake(x,z)||lakeDist(x,z)<ICE_EDGE||lineAt(RIVER,x,z)[0]<RIVER_E)return 0;
+ if(typeof ROADS!=='undefined'&&ROADS.some(R=>lineAt(R.L,x,z)[0]<R.w*.6))return .02;
+ const n=fbm(x*.05+3,z*.05-8);return clamp(.05+(n-.4)*.9,.04,.24);}
 function frameVisuals(dt){
  let gy;
  if(P.yOver!==undefined)gy=P.yOver; // на лестнице и на площадке вышки
  else{const gyRaw=heightAt(P.x,P.z,P.yv);P.yv=P.yv===undefined?gyRaw:P.yv+(gyRaw-P.yv)*Math.min(1,dt*10);if(Math.abs(P.yv-gyRaw)>3)P.yv=gyRaw;gy=P.yv;}
  updateDoors(dt);GRASS_U.uTime.value+=dt;if(G&&G.cine)updateCine(dt);
+ // ТЗ 6: погружение в снег. Глубина покрова — из того же шума, что и замедление «по сугробам» (fbm>.6),
+ // на льду, дорогах, в домах, на вышке и лестнице — 0. Опускаем модель плавно (без дрожания и скачков): ступни и голени уходят под поверхность
+ {const want=P.yOver!==undefined?0:snowDepth(P.x,P.z);P.sink=(P.sink||0)+(want-(P.sink||0))*Math.min(1,dt*3);gy-=P.sink;}
  hero.position.set(P.x,gy,P.z);
  if(caveRoof)caveRoof.visible=!inCave(P.x,P.z);hero.rotation.y=P.a;heroAnim.mixer.update(dt);
  // у Remy нет анимации смерти: герой просто оседает и падает
  if(G.over&&!heroAnim.acts.death&&G.dead){G.fall=Math.min(1,(G.fall||0)+dt*1.4);hero.rotation.x=Math.pow(G.fall,2)*1.45;}
  flameMesh.visible=P.torch>0;
- {const on=!!(P.inv&&P.inv.flash&&P.flashOn);flashMesh.visible=!!(P.inv&&P.inv.flash)&&P.torch<=0;
+ {const on=!!(P.inv&&P.inv.flash&&P.flashOn);lanternPose(dt);
+  // фонарь виден только когда горит (в руке); погашенный убран в рюкзак
+  flashMesh.visible=on&&lanternK>.3&&!ST&&!G.pose&&!P.climb&&P.torch<=0;
   hero.updateMatrixWorld(true);if(flashHand){flashHand.getWorldPosition(_fv);hero.worldToLocal(_fv);}else _fv.set(.28,1.0,.3);
-  flashMesh.position.copy(_fv);flashMesh.position.z+=.08;flashMesh.rotation.x=-.12;
-  flashLight.position.set(_fv.x,_fv.y,_fv.z+.2);flashLight.target.position.set(_fv.x*.3,0,5.5);
-  flashLight.intensity=on?3.2:0;flashLens.material.color.setHex(on?0xfff6dd:0x333333);}
+  flashMesh.position.copy(_fv);flashMesh.position.y-=.03;flashMesh.rotation.set(0,0,0);
+  const fk=on&&flashMesh.visible?1:0,fl=1+Math.sin(performance.now()*.017)*.05+Math.sin(performance.now()*.041)*.03;
+  flashLight.position.set(_fv.x,_fv.y-.2,_fv.z+.05);flashLight.target.position.set(_fv.x*.3,0,7);
+  flashLight.intensity=fk*2.6*fl;flashGlow.position.set(_fv.x,_fv.y-.2,_fv.z);flashGlow.intensity=fk*.6*fl;
+  flashLens.material.emissive.setHex(fk?0xffa040:0);flashLens.material.emissiveIntensity=fk?.9*fl:0;const fm=flashMesh.getObjectByName('flame');if(fm)fm.visible=!!fk;}
  // камера: высоко и под углом, как в MOBA
  const zoom=G.zoom,sh=G.shake>0?(rnd()-.5)*.4*G.shake:0;
  const target=new THREE.Vector3(P.x,gy+1,P.z);
@@ -2480,14 +2786,18 @@ function frameVisuals(dt){
   b.roof.visible=!(inside||behind);
   if(b.shell){const sh=!(inside||behind);if(b.shell.visible!==sh){b.shell.visible=sh;b.roof.visible=false;for(const pc of b.pieces)pc.visible=!sh;}else if(sh)b.roof.visible=false;}
   const tgt=inside?1:0;if(Math.abs(b.cut-tgt)>.001){b.cut+=(tgt-b.cut)*Math.min(1,dt*7);if(Math.abs(b.cut-tgt)<.01)b.cut=tgt;
-   for(const pc of b.front)pc.scale.y=pc.userData.sy*(1-.68*b.cut);}}
+   for(const pc of b.front)pc.scale.y=pc.userData.sy*(1-.68*b.cut);}
+  // ТЗ 2.3: второй этаж. Герой внизу — верхний этаж (перекрытие, стены, мебель) скрыт целиком, видно нижний этаж и лестницу;
+  // герой наверху — показан верхний этаж, его стена к камере срезана, как у нижнего
+  if(b.upper){const up=inside&&P.flr===1;b.upper.visible=!(inside&&!up)&&!(behind&&!inside&&false);
+   const t2=up?1:0;b.cut2=b.cut2===undefined?0:b.cut2;b.cut2+=(t2-b.cut2)*Math.min(1,dt*7);for(const pc of b.front2)pc.scale.y=pc.userData.sy*(1-.68*b.cut2);}}
  // время суток
  const h=hour(),dark=darkness(),sunA=(h-6)/12*Math.PI;
  const dayL=1-dark,storm=WX.fog;
  sun.position.set(P.x+Math.cos(sunA)*40,Math.max(8,Math.sin(sunA)*60),P.z-25);sun.target.position.set(P.x,gy,P.z);
  sun.intensity=.9*dayL*(1-storm*.6);hemi.intensity=.012+.74*Math.pow(dayL,1.6)*(1-storm*.25);
  sun.color.setHSL(.08,.5,lerp(.65,.92,clamp(Math.sin(sunA)*2,0,1)));
- moon.position.set(P.x,gy+16,P.z+4);moon.intensity=.5*dark*(WX.state==='clear'?1.25:.85)+(P.inB?.3*dark:0);
+ moon.position.set(P.x,gy+16,P.z+4);moon.intensity=0; // ТЗ 8.1: никакого «лунного» ореола вокруг героя — свет только от огня, фонаря и неба
  if(dark>.95)tmpC.copy(fogNight);else if(dark>0)tmpC.copy(fogDusk).lerp(fogNight,dark).lerp(fogDay,Math.max(0,.4-dark));else tmpC.copy(fogDay);
  tmpC.lerp(fogStorm.clone().multiplyScalar(dayL*.95+.05),storm*.6);
  scene.fog.color.copy(tmpC);scene.background.copy(tmpC);
@@ -2553,13 +2863,13 @@ function intro(){
  ${Object.entries(DIFFS).map(([k,d],i)=>`<button class="dbtn" data-m="${k}"><kbd>${i+1}</kbd><b>${d.n}</b><small>${d.d}</small></button>`).join('')}</div>
  ${sv?'<div style="color:var(--dim);font-size:12px">Новая игра заменит сохранение.</div>':''}
  ${b?`<div style="margin-top:8px;color:var(--dim)">Рекорд: ${Math.floor(b/24)} дн. ${b%24} ч</div>`:''}
- <details><summary>Как выжить</summary><ul><li><b>Холод — главный враг.</b> Одежда греет, но изнашивается. Ночью и в метель на улице счёт идёт на часы.</li><li>Без печи в доме лишь чуть теплее, чем снаружи. Закрывайте двери.</li><li>Еды и спичек мало: охотьтесь, рыбачьте, кипятите талую воду.</li><li>Ночью включайте фонарик (<kbd>L</kbd>) — но батарейки садятся.</li><li>Волк сначала присматривается: отходите, держите факел или бросьте камень.</li></ul></details>
+ <details><summary>Как выжить</summary><ul><li><b>Холод — главный враг.</b> Одежда греет, но изнашивается. Ночью и в метель на улице счёт идёт на часы.</li><li>Без печи в доме лишь чуть теплее, чем снаружи. Закрывайте двери.</li><li>Еды и спичек мало: охотьтесь, рыбачьте, кипятите талую воду.</li><li>Ночью зажигайте керосиновый фонарь (<kbd>L</kbd>) — но керосин кончается, ищите бутылки в домах.</li><li>Волк сначала присматривается: отходите, держите факел или бросьте камень.</li></ul></details>
  <details><summary>Авторы</summary>${CREDITS}</details>`;
  screen.hidden=false;
 }
 // ---------- сохранение: автоматически у порога дома, после сна и раз в минуту; смерть стирает сохранение ----------
 // WORLD_VER повышать при любом изменении генерации мира: иначе номера объектов в старом сохранении укажут не туда
-const SAVE_KEY='belaya-tishina-3d-save',WORLD_VER=3;let WORLD_SEED=1;
+const SAVE_KEY='belaya-tishina-3d-save',WORLD_VER=4;let WORLD_SEED=1; // WORLD_VER 4: новые здания (07.11.2026)
 function readSave(){try{const s=localStorage.getItem(SAVE_KEY),d=s?JSON.parse(s):null;return d&&d.wv===WORLD_VER?d:null;}catch(e){return null;}}
 function clearSave(){try{localStorage.removeItem(SAVE_KEY);}catch(e){}}
 function saveGame(){
@@ -2572,14 +2882,14 @@ function saveGame(){
  const extra=objs.filter(o=>o.sid===undefined&&['item','stick','stone'].includes(o.kind)).map(o=>({k:o.kind,id:o.id,n:o.n,cc:o.cc,x:+o.x.toFixed(2),z:+o.z.toFixed(2),y:o.y}));
  const fires=objs.filter(o=>o.kind==='fire'&&!o.stove).map(o=>({x:o.x,z:o.z,f:o.fuel}));
  const p={...P};for(const k of['inB','onTower','climb','yOver','yv'])delete p[k];
- const data={v:2,wv:WORLD_VER,seed:WORLD_SEED,diff:DIFF_ID,G:{min:G.min,rescueAt:G.rescueAt,heli:G.heli,visited:[...G.visited],seen:[...G.seen],duskDay:G.duskDay,restockDay:G.restockDay},P:p,WX,st,removed,extra,fires,
+ const data={v:2,wv:WORLD_VER,seed:WORLD_SEED,diff:DIFF_ID,G:{min:G.min,rescueAt:G.rescueAt,heli:G.heli,visited:[...G.visited],seen:[...G.seen],thinSeen:[...(G.thinSeen||[])],duskDay:G.duskDay,restockDay:G.restockDay},P:p,WX,st,removed,extra,fires,
   trees:trees.map((t,i)=>t.uses?[i,t.uses]:null).filter(Boolean),temps:buildings.map(b=>+b.temp.toFixed(2))};
  try{localStorage.setItem(SAVE_KEY,JSON.stringify(data));}catch(e){}
 }
 let SID_N=0;
 function applySave(s){
  DIFF_ID=s.diff;DIFF=DIFFS[s.diff];newGame();
- Object.assign(G,s.G,{visited:new Set(s.G.visited),seen:new Set(s.G.seen)});Object.assign(P,s.P);Object.assign(WX,s.WX);
+ Object.assign(G,s.G,{visited:new Set(s.G.visited),seen:new Set(s.G.seen),thinSeen:new Set(s.G.thinSeen||[])});Object.assign(P,s.P);Object.assign(WX,s.WX);
  const rm=new Set(s.removed);
  for(const o of objs.slice()){if(o.sid===undefined)continue;if(rm.has(o.sid)){removeObj(o);continue;}const v=s.st[o.sid];if(!v)continue;
   if(o.kind==='box'){o.searched=true;o.loot=v.l;}else if(o.kind==='hole')o.fish=v.f;else if(o.kind==='door'){o.open=true;o.ang=1.6;o.pivot.rotation.y=o.base+o.sign*1.6;}
@@ -2667,7 +2977,7 @@ addEventListener('keydown',e=>{
  if(!G||G.over||e.repeat)return;
  switch(e.code){case'KeyE':interact();break;case'KeyF':makeFire();break;case'KeyR':openSleep();break;case'KeyI':openInv(INV.cat==='status'?'all':INV.cat);break;case'Tab':openInv('status');break;case'KeyM':openMap();break;case'KeyQ':throwStone();break;
   case'KeyJ':openJournal();break;
-  case'KeyL':if(!P.inv.flash){log('У вас нет фонарика');break;}if(!P.flashOn&&!(P.flashBat>0)){log('Батарейки сели — нужны новые','bad');break;}P.flashOn=!P.flashOn;SFX.thud&&SFX.thud();break;
+  case'KeyL':toggleLantern();break;
   case'KeyH':{const h=document.getElementById('help');h.hidden=!h.hidden;break;}}
 });
 addEventListener('keyup',e=>{keys[e.code]=false;});
@@ -2715,8 +3025,20 @@ const SFX=(()=>{
    else{noise(.12,'bandpass',1400+Math.random()*600,.22,1.2);noise(.06,'highpass',4000,.05);}}, // хруст снега
   // короткий деревянный «клац», как у кубической двери: два глухих удара без скрипа
   // мягкий звук двери: открытие — тихий шорох петли, закрытие — глухой стук (только при касании косяка)
-  door(open){if(open)noise(.3,'bandpass',380,.05,3);},
+  // ТЗ 1.1: старая деревянная дверь на морозе. Открытие — щелчок щеколды + низкий скрип петли (рывками, «трение-проскальзывание»),
+  // закрытие — короткий скрип и мягкий стук полотна о косяк (стук добавляется ниже, по касанию)
+  door(open){if(!ac||!on)return;const t=ac.currentTime;
+   if(open){noise(.03,'highpass',2500,.06);tone(1800,1400,.025,'square',.015);}
+   const dur=open?.75:.4,o=ac.createOscillator(),lfo=ac.createOscillator(),lg=ac.createGain(),am=ac.createGain(),f=ac.createBiquadFilter(),f2=ac.createBiquadFilter(),g=ac.createGain();
+   const f0=open?95+Math.random()*25:120+Math.random()*20;o.type='sawtooth';o.frequency.setValueAtTime(f0,t+(open?.05:0));o.frequency.linearRampToValueAtTime(f0*(open?1.45:.8),t+dur);
+   lfo.type='square';lfo.frequency.setValueAtTime(open?17:24,t);lfo.frequency.linearRampToValueAtTime(open?11:16,t+dur);lg.gain.value=.5;am.gain.value=.5;lfo.connect(lg).connect(am.gain);
+   f.type='bandpass';f.frequency.value=950;f.Q.value=4;f2.type='lowpass';f2.frequency.value=2200;
+   g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(open?.05:.035,t+.08);g.gain.setValueAtTime(open?.05:.035,t+dur*.6);g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+   o.connect(am).connect(f).connect(f2).connect(g).connect(master);o.start(t);lfo.start(t);o.stop(t+dur+.05);lfo.stop(t+dur+.05);},
   bang(k){noise(.15,'lowpass',300,.35*k);tone(90,50,.18,'sine',.3*k);},
+  // ТЗ 5.2: треск тонкого льда — сухой щелчок + низкий «стон» льда (k 0..1 — насколько опасно)
+  ice(k){noise(.04,'highpass',1800+Math.random()*1500,.12+.25*k);noise(.25,'bandpass',260+Math.random()*120,.05+.12*k,6,.03);tone(320+Math.random()*200,90,.35+.3*k,'sine',.03+.06*k,.02);},
+  splash(){noise(.9,'lowpass',900,.5);noise(.4,'highpass',2500,.25,0,.05);tone(140,40,.6,'sine',.25);},
   growl(d){const v=vol(d,40);if(v<=0)return;const o=ac&&on&&ac.createOscillator();if(!o)return;const t=ac.currentTime,g=ac.createGain(),lfo=ac.createOscillator(),lg=ac.createGain();
    o.type='sawtooth';o.frequency.value=70;lfo.frequency.value=22;lg.gain.value=25;lfo.connect(lg).connect(o.frequency);
    const f=ac.createBiquadFilter();f.type='lowpass';f.frequency.value=500;env(g,t,.15,.12*v,1.3);
@@ -2762,8 +3084,8 @@ const SFX=(()=>{
    // боль
    if(P.hp<st.hp-3)S.hurt();st.hp=P.hp;
    // дверь: открытие/закрытие и стук о косяк
-   for(const o of objs)if(o.kind==='door'||o.pivot){if(o._so===undefined)o._so=o.open;if(o._so!==o.open){o._so=o.open;if(dist(P.x,P.z,o.x||P.x,o.z||P.z)<15)S.door(o.open);}
-    if(!o.open&&o.ang===0&&o._sa>0.02&&dist(P.x,P.z,o.x||P.x,o.z||P.z)<15){noise(.1,'lowpass',220,.1*Math.min(1,o._sv||.5));}o._sa=o.ang;o._sv=Math.abs(o.vel||0);}
+   for(const o of objs)if(o.kind==='door'||o.pivot){if(o._so===undefined)o._so=o.open;if(o._so!==o.open){o._so=o.open;const now=performance.now();if(dist(P.x,P.z,o.x||P.x,o.z||P.z)<15&&!(now-(o._st||0)<500)){o._st=now;S.door(o.open);}}
+    if(!o.open&&o.ang===0&&o._sa>0.02&&dist(P.x,P.z,o.x||P.x,o.z||P.z)<15){noise(.12,'lowpass',200,.16*Math.min(1,o._sv||.5));tone(85,55,.14,'sine',.08*Math.min(1,o._sv||.5));}o._sa=o.ang;o._sv=Math.abs(o.vel||0);}
    // новый огонь
    let nf=0;for(const o of objs)if(o.kind==='fire')nf++;if(nf>st.fires)S.ignite();st.fires=nf;
   }
@@ -2964,7 +3286,8 @@ html,body{overscroll-behavior:none}canvas{touch-action:none}
  let sid=null,cx=0,cy=0;const DEAD=10;
  function setDir(dx,dy){const l=Math.hypot(dx,dy);if(l<DEAD){JOY.on=false;JOY.x=JOY.z=0;return;}JOY.on=true;JOY.x=dx/l;JOY.z=dy/l;}
  const canStick=t=>screen.hidden&&typeof G!=='undefined'&&G&&!G.over&&!menuOpts&&t.clientX<innerWidth/2&&!(t.target.closest&&t.target.closest('button,#tcTop,#tcBtns,.panel,#inv,#map,#modal,#find'));
- document.addEventListener('touchstart',e=>{if(sid!==null)return;const t=e.changedTouches[0];if(!canStick(t))return;e.preventDefault();sid=t.identifier;cx=t.clientX;cy=t.clientY;setDir(0,0);},{passive:false,capture:true});
+ // ТЗ 9.1: если палец «потерялся» (touchend съело меню/лут), стик больше не залипает — новое касание его перехватывает
+ document.addEventListener('touchstart',e=>{if(sid!==null&&![...e.touches].some(t=>t.identifier===sid)){sid=null;setDir(0,0);}if(sid!==null)return;const t=e.changedTouches[0];if(!canStick(t))return;e.preventDefault();sid=t.identifier;cx=t.clientX;cy=t.clientY;setDir(0,0);},{passive:false,capture:true});
  document.addEventListener('touchmove',e=>{for(const t of e.changedTouches)if(t.identifier===sid){e.preventDefault();setDir(t.clientX-cx,t.clientY-cy);}},{passive:false,capture:true});
  const end=e=>{for(const t of e.changedTouches)if(t.identifier===sid){sid=null;setDir(0,0);}};
  document.addEventListener('touchend',end,true);document.addEventListener('touchcancel',end,true);
@@ -2974,7 +3297,7 @@ html,body{overscroll-behavior:none}canvas{touch-action:none}
  renderer.domElement.addEventListener('touchend',()=>{pd=0;});
  // видимость: прячем на стартовом экране, в меню оставляем только ✕
  setInterval(()=>{if(renderer.domElement.clientWidth!==innerWidth||renderer.domElement.clientHeight!==innerHeight){renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();}const inGame=screen.hidden&&typeof G!=='undefined'&&G&&!G.over;tc.classList.toggle('off',!inGame);
-  const inMenu=!!menuOpts||!!(typeof ST!=='undefined'&&ST);tc.classList.toggle('menu',inMenu&&!ST);if(inMenu&&sid===null)setDir(0,0);},150);
+  const inMenu=!!menuOpts||!!(typeof ST!=='undefined'&&ST);tc.classList.toggle('menu',inMenu&&!ST);if(inMenu){sid=null;setDir(0,0);}},150);
  // полноэкранный режим по первому касанию
  document.addEventListener('touchend',()=>{const d=document.documentElement;if(!document.fullscreenElement&&d.requestFullscreen)d.requestFullscreen().catch(()=>{});},{once:true});
 })();
