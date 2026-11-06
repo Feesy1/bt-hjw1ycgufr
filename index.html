@@ -233,6 +233,7 @@ window.__retryJS=async()=>{for(const src of __failedJS.splice(0)){let ok=false;f
 <script src="assets3d/lib/SkeletonUtils.js"></script>
 <script src="assets3d/models.js"></script>
 <script src="assets3d/hero.js"></script>
+<script src="assets3d/anims.js"></script>
 <script src="assets3d/spruce.js"></script>
 <script src="assets3d/cabin.js"></script>
 <script src="assets3d/stove.js"></script>
@@ -1252,9 +1253,10 @@ function updateClimb(dt){
  const segT=[.08,.9,1],k=u<segT[0]?0:u<segT[1]?1:2,a=k?segT[k-1]:0,f=(u-a)/(segT[k]-a);
  const A=p[k],B=p[k+1],lz=lerp(A[1],B[1],f),ly=lerp(A[2],B[2],f),w=c.tw.W(A[0],lz);
  // на лестнице — перехват за перекладины: рывок вверх на каждую ступень и покачивание корпуса
- const step=k===1?Math.abs(Math.sin(c.t*Math.PI*2.2))*.12:0;
+ const hasL=!!(heroAnim&&heroAnim.acts.ladder);P.climbK=k;
+ const step=k===1&&!hasL?Math.abs(Math.sin(c.t*Math.PI*2.2))*.12:0;
  P.x=w.x;P.z=w.z;P.yOver=c.tw.y0+ly+step;P.moving=true;P.sprinting=false;P.a=c.tw.ry+Math.PI;
- if(hero){hero.rotation.x=k===1?-.12:0;hero.rotation.z=k===1?Math.sin(c.t*Math.PI*2.2)*.09:0;}
+ if(hero&&!hasL){hero.rotation.x=k===1?-.12:0;hero.rotation.z=k===1?Math.sin(c.t*Math.PI*2.2)*.09:0;}
  if(heroAnim&&heroAnim.acts.walk)heroAnim.acts.walk.timeScale=(heroAnim.walkTS||1)*(k===1?.6:1);
  G.min+=dt*1.5;updateWorld(dt*1.5); // ~6 игровых минут на подъём
  if(u>=1){P.climb=null;P.moving=false;if(hero){hero.rotation.x=0;hero.rotation.z=0;}if(heroAnim&&heroAnim.acts.walk)heroAnim.acts.walk.timeScale=heroAnim.walkTS||1;
@@ -1576,6 +1578,10 @@ function makeHero(){
  extra.forEach(([p,x])=>p.add(x));
  scene.add(hero);
  heroAnim=animSet(g,model,{idle:['idle.001','idle'],walk:['walk.001','walk'],run:['run.001','run'],act:['lift_heavy.001'],hit:['hit_to_body_01.001'],death:['fall.001']});
+ // дополнительные анимации из Mixamo (assets3d/anims.js): холод, усталость, лестница, у огня, сон, бросок, схватка, рубка, питьё и т.д.
+ if(window.HERO_ANIMS)for(const[k,a]of Object.entries(HERO_ANIMS)){
+  const tracks=a.t.map(([n,t,v])=>/quaternion$/.test(n)?new THREE.QuaternionKeyframeTrack(n,t,v):new THREE.VectorKeyframeTrack(n,t,v));
+  heroAnim.acts[k]=heroAnim.mixer.clipAction(new THREE.AnimationClip(k,a.d,tracks));}
  // «поднять тяжёлое» длится 19,5 с; для действия берём кусок 15–19,5 с (присел — выпрямился) и играем вдвое быстрее
  if(heroAnim.acts.act){const c=heroAnim.acts.act.getClip();if(c.duration>8){const sub=THREE.AnimationUtils.subclip(c,'act',450,585,30);heroAnim.acts.act=heroAnim.mixer.clipAction(sub);heroAnim.acts.act.timeScale=2;}}
  // темп ходьбы/бега под скорость в игре (2,5 м/с шагом, ~4,6 м/с бегом), чтобы ноги не «скользили»:
@@ -1585,7 +1591,7 @@ function makeHero(){
  if(vr)heroAnim.acts.run.timeScale=clamp(4.6/vr,.6,2);
  HERO_SPEEDS={walk:vw,run:vr};
  play(heroAnim,'idle',0);
- heroAnim.mixer.addEventListener('finished',e=>{if(e.action===heroAnim.acts.act||e.action===heroAnim.acts.hit){heroAnim.cur=null;play(heroAnim,P&&P.moving?'walk':'idle',.15);}});
+ heroAnim.mixer.addEventListener('finished',e=>{if(e.action!==heroAnim.acts.death){heroAnim.cur=null;play(heroAnim,P&&P.moving?'walk':'idle',.15);}});
  torchLight=new THREE.PointLight(0xff9a40,0,12,1.6);torchLight.position.set(.3,1.4,.3);hero.add(torchLight);
  flameMesh=new THREE.Group();const st=new THREE.Mesh(new THREE.CylinderGeometry(.03,.03,.5,5),MAT.stick);st.position.y=-.2;flameMesh.add(st);
  const f1=new THREE.Mesh(new THREE.ConeGeometry(.09,.28,6),MAT.fireA);f1.position.y=.12;flameMesh.add(f1);const f2=new THREE.Mesh(new THREE.ConeGeometry(.05,.17,6),MAT.fireB);f2.position.y=.1;flameMesh.add(f2);
@@ -2000,6 +2006,7 @@ function dropItem(id,n,cc,at){
 function useItem(id){
  const it=ITEMS[id],u=it.use;if(!u||!P.inv[id])return;
  if(it.s){wear(id);return;}
+ if(u.kc||u.water)playOnce('drink'); // поднести ко рту: еда и питьё
  if(id==='cells'){if(!P.inv.flash){log('Сначала найдите фонарик','bad');return;}take(id);P.flashBat=240;log('Новые батарейки: фонарик заряжен на 4 часа','good');return;}
  // еда съедается не целиком, если столько не нужно: остаток остаётся в рюкзаке («начато, осталось N ккал»)
  if(u.kc>=150){P.left=P.left||{};const fr=P.left[id]||1,avail=u.kc*fr,need=(100-P.food)/100*KCAL;
@@ -2018,9 +2025,10 @@ function useItem(id){
 }
 // длительное действие (починка, разделка): время идёт с той же погодой и холодом, что и вокруг
 function longAction(name,min,done){
- const f=document.getElementById('fade');f.style.opacity=.55;
- setTimeout(()=>{const r=passTime(min,{stop:()=>P.warm<=3,stopMsg:'Слишком холодно — руки не слушаются, вы бросили дело'});f.style.opacity=0;if(G.over)return;
-  if(r)log(r,'bad');else done();},380);
+ const f=document.getElementById('fade');G.pose=name==='Рубка'?'chop':'crouch';
+ setTimeout(()=>{f.style.opacity=.55;},900);
+ setTimeout(()=>{const r=passTime(min,{stop:()=>P.warm<=3,stopMsg:'Слишком холодно — руки не слушаются, вы бросили дело'});f.style.opacity=0;G.pose=null;if(G.over)return;
+  if(r)log(r,'bad');else done();},1300);
 }
 const COOK=[['raw','cooked',30],['fish','fishc',15],['burbot','burbotc',20],['pike','pikec',25]];
 function openFireMenu(f){
@@ -2048,8 +2056,8 @@ function openSleep(){
 }
 function doWait(min){const f=document.getElementById('fade');f.style.opacity=.6;
  setTimeout(()=>{const r=passTime(min,{stop:()=>P.warm<=15,stopMsg:'Вы замёрзли — ждать дальше опасно'});f.style.opacity=0;if(!G.over){log(r||`Прошло ${fmtDur(min)}`,r?'bad':'');saveGame();}},400);}
-function doSleep(min,bed){const f=document.getElementById('fade');f.style.opacity=.9;
- setTimeout(()=>{const r=passTime(min,{sleep:true,bed});f.style.opacity=0;if(!G.over){log(r||'Вы проснулись',r&&r.includes('!')?'bad':'');saveGame();}},450);}
+function doSleep(min,bed){const f=document.getElementById('fade');G.pose='sleep';f.style.transition='opacity 1.2s';f.style.opacity=.9;
+ setTimeout(()=>{const r=passTime(min,{sleep:true,bed});f.style.opacity=0;setTimeout(()=>{f.style.transition='';G.pose=null;if(!G.over)playOnce('getup');},700);if(!G.over){log(r||'Вы проснулись',r&&r.includes('!')?'bad':'');saveGame();}},1500);}
 // ---------- карта ----------
 let mapBase=null;
 function buildMapBase(){
@@ -2200,8 +2208,8 @@ function interact(){
 function fishHole(o,min){
  // каждые 15 минут — шанс поклёвки: зависит от времени суток, погоды и того, сколько рыбы осталось в лунке.
  // Вид рыбы: окунь чаще всего, налим — в темноте, щука — редко. Удочка изнашивается, на холоде рыбалка прерывается
- const got={};let msg=null;const f=document.getElementById('fade');f.style.opacity=.6;
- setTimeout(()=>{
+ const got={};let msg=null;const f=document.getElementById('fade');G.pose='fish';setTimeout(()=>{f.style.opacity=.6;},1000);
+ setTimeout(()=>{G.pose=null;
   for(let t=0;t<min&&!G.over;t+=15){
    const r=passTime(15,{stop:()=>P.warm<=8,stopMsg:'Вы слишком замёрзли и смотали удочку'});if(r){msg=r;break;}
    const h=hour(),tf=(h>=5&&h<9)||(h>=16&&h<20)?1.6:h>=21||h<5?.6:1,wf={blizzard:.5,snow:1.1,fog:1.15}[WX.state]||1;
@@ -2213,7 +2221,7 @@ function fishHole(o,min){
   if(!P.inv.rod)P.rod=100;
   log(ids.length?'Улов: '+ids.map(k=>ITEMS[k].n.replace(/^Сыр\S+ /,'')+(got[k]>1?' ×'+got[k]:'')).join(', '):'Не клюёт…',ids.length?'good':'');
   if(msg)log(msg,'bad');
- },450);
+ },1500);
 }
 // ---------- поиск, как в Long Dark: полоска «Поиск…», находки по одной, «Взять» / «Оставить» ----------
 let SR=null;
@@ -2270,7 +2278,7 @@ function throwStone(){
  if(G.throwCd>0)return;if(!P.inv.stone){log('Нет камней — их можно найти на земле');return;}
  _ndc.set(mouse.x/innerWidth*2-1,-(mouse.y/innerHeight)*2+1);ray.setFromCamera(_ndc,camera);_plane.constant=-groundY(P.x,P.z);
  let a=P.a;if(ray.ray.intersectPlane(_plane,_hit))a=Math.atan2(_hit.x-P.x,_hit.z-P.z);
- take('stone');P.a=a;G.throwCd=.5;act();SFX.throw();
+ take('stone');P.a=a;G.throwCd=.5;if(!playOnce('throw'))act();SFX.throw();
  const m=new THREE.Mesh(stoneGeo,MAT.rock);const y=groundY(P.x,P.z)+1.4;m.position.set(P.x,y,P.z);scene.add(m);
  stones.push({x:P.x,z:P.z,y,vx:Math.sin(a)*17,vz:Math.cos(a)*17,vy:3,life:.8,m});
 }
@@ -2300,11 +2308,22 @@ function endStruggle(ok){
 //  ОБНОВЛЕНИЕ
 // =====================================================================
 const keys={};
-function setHeroAnim(){ // действие прерывается, если игрок пошёл; удар доигрывается
- if((heroAnim.cur===heroAnim.acts.act&&!P.moving)||heroAnim.cur===heroAnim.acts.hit)if(heroAnim.cur.isRunning())return;play(heroAnim,P.moving?(P.sprinting?'run':'walk'):'idle');}
+// разовые анимации (поднять, бросок, питьё, удар, подъём с кровати) доигрываются; поднятие прерывается, если игрок пошёл
+const ONCE=['act','hit','throw','drink','getup','look'];
+function playOnce(n){if(heroAnim.acts[n]){heroAnim.cur=null;play(heroAnim,n,.15,true);return true;}return false;}
+function heroPose(){ // долгие позы: у огня, на рыбалке, во сне, в схватке, за работой
+ if(ST)return'wolf';if(G.pose)return G.pose;if(menuKind==='fire')return'crouch';if(menuKind==='fish')return'fish';if(SR||menuKind==='find')return'crouch';return null;}
+function setHeroAnim(dt){const A=heroAnim.acts,c=heroAnim.cur;
+ if(c&&c.isRunning()&&ONCE.some(k=>A[k]===c)&&!(P.moving&&(c===A.act||c===A.look||c===A.drink)))return;
+ const ps=heroPose();if(ps&&A[ps]){play(heroAnim,ps,.3);return;}
+ let n;
+ if(P.climb)n=P.climbK===1&&A.ladder?'ladder':'walk';
+ else if(P.moving){G.idleT=0;n=P.sprinting?'run':P.warm<25&&A.coldwalk?'coldwalk':(P.rest<20||weight()>maxW())&&A.tired?'tired':'walk';}
+ else{n=P.warm<30&&A.shiver?'shiver':'idle';G.idleT=(G.idleT||0)+(dt||0);if(n==='idle'&&G.idleT>12&&A.look){G.idleT=-8;playOnce('look');return;}}
+ play(heroAnim,n,.25);}
 function update(dt){
  if(ST){ST.t+=dt;ST.prog=Math.max(0,ST.prog-dt*.3);strFill.style.width=Math.min(100,ST.prog*100)+'%';
-  P.moving=false;P.sprinting=false;setHeroAnim();
+  P.moving=false;P.sprinting=false;setHeroAnim(dt);
   G.flash=Math.max(G.flash,.25);G.shake=Math.max(G.shake,.2);
   // анимация схватки: волк висит на герое и рвёт, герой отклоняется и отталкивает его (каждое E — толчок)
   {const w=ST.w,t=ST.t;ST.kick=Math.max(0,(ST.kick||0)-dt*4);
@@ -2316,7 +2335,7 @@ function update(dt){
    hero.rotation.x=-.22-.08*Math.sin(t*9)+ST.kick*.5;hero.rotation.z=Math.sin(t*4.1)*.12;}
   if(ST.prog>=1)endStruggle(true);else if(ST.t>=4)endStruggle(false);return;}
  G.throwCd-=dt;G.flash=Math.max(0,G.flash-dt*1.5);G.shake=Math.max(0,G.shake-dt);G.growl-=dt;
- if(P.climb){updateClimb(dt);setHeroAnim();return;}
+ if(P.climb){updateClimb(dt);setHeroAnim(dt);return;}
  let mx=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0),mz=(keys.KeyS||keys.ArrowDown?1:0)-(keys.KeyW||keys.ArrowUp?1:0);
  if(window.JOY&&JOY.on){mx=JOY.x;mz=JOY.z;} // сенсорный джойстик: плавное направление вместо 8 рывков
  const wgt=weight(),MW=maxW();P.moving=!!(mx||mz);
@@ -2342,7 +2361,7 @@ function update(dt){
   }
  }
  {const was=P.inB;P.inB=P.onTower?null:buildingAt(P.x,P.z);if(P.inB&&P.inB!==was)saveGame();} // автосохранение у порога
- setHeroAnim();updateSearch(dt);
+ setHeroAnim(dt);updateSearch(dt);
  G.saveT=(G.saveT||0)+dt;if(G.saveT>60){G.saveT=0;saveGame();}
  G.min+=dt*TIME_RATE;updateWorld(dt*TIME_RATE);if(G.over)return;
  // зоны и карта
