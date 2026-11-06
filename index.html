@@ -2823,7 +2823,7 @@ function makeIcons(){
 #tcBtns{position:absolute;right:14px;bottom:14px;display:grid;grid-template-columns:repeat(3,64px);gap:10px}
 #tcTop{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);display:flex;gap:6px}
 #tc.menu #tcTop{left:auto;right:10px;top:10px;bottom:auto;transform:none}
-body.touch #help{display:none!important}
+body.touch #help{display:none!important} body.touch #clock{zoom:.68} body.touch #log,body.touch #prompt,body.touch #sbar{zoom:.75} body.touch #warn{zoom:.8} body.touch #title{zoom:.7} #tc #tcBtns{grid-template-columns:repeat(3,46px)!important;gap:7px!important} #tc #tcBtns button{width:46px!important;height:46px!important;font-size:10.5px!important} #tc #tcTop{gap:5px} #tc #tcTop button{width:46px!important;height:30px!important;font-size:10px!important;border-radius:8px} #tcFps{position:fixed;left:50%;top:2px;transform:translateX(-50%);font:600 10px monospace;color:#cfe;opacity:.7;z-index:60;pointer-events:none;text-shadow:0 1px 2px #000}
 body.touch #vitals{top:max(8px,env(safe-area-inset-top));left:max(10px,env(safe-area-inset-left));bottom:auto;flex-direction:row;gap:6px}
 body.touch #vitals .ring{width:38px;height:38px}body.touch #vitals .ring span{font-size:15px}body.touch #vitals .lbl{display:none}
 body.touch #screen{overflow:auto;touch-action:pan-y;align-items:flex-start}
@@ -2871,7 +2871,7 @@ html,body{overscroll-behavior:none}canvas{touch-action:none}
  });
  // джойстик
  // невидимый плавающий джойстик: касание в любом месте левой половины экрана = центр, направление = куда ведёшь палец
- window.JOY={x:0,z:0,on:false};
+ {const f=document.createElement('div');f.id='tcFps';document.body.appendChild(f);let fn=0,ft=performance.now();(function fl(){fn++;const t=performance.now();if(t-ft>=1000){f.textContent=Math.round(fn*1000/(t-ft))+' FPS';fn=0;ft=t;}requestAnimationFrame(fl);})();} window.JOY={x:0,z:0,on:false};
  let sid=null,cx=0,cy=0;const DEAD=10;
  function setDir(dx,dy){const l=Math.hypot(dx,dy);if(l<DEAD){JOY.on=false;JOY.x=JOY.z=0;return;}JOY.on=true;JOY.x=dx/l;JOY.z=dy/l;}
  const canStick=t=>screen.hidden&&typeof G!=='undefined'&&G&&!G.over&&!menuOpts&&t.clientX<innerWidth/2&&!(t.target.closest&&t.target.closest('button,#tcTop,#tcBtns,.panel,#inv,#map,#modal,#find'));
