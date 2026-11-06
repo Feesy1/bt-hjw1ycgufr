@@ -348,8 +348,9 @@ const TIME_RATE=2,BASE_W=25;
 // =====================================================================
 //  THREE: РЕНДЕР, СЦЕНА, СВЕТ
 // =====================================================================
-const renderer=new THREE.WebGLRenderer({antialias:true});
-renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
+const IS_TOUCH=('ontouchstart' in window)||navigator.maxTouchPoints>0; // телефон: ниже разрешение, без сглаживания, тени меньше
+const renderer=new THREE.WebGLRenderer({antialias:!IS_TOUCH,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio,IS_TOUCH?1.25:1.5));
 renderer.setSize(innerWidth,innerHeight);
 renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 renderer.outputEncoding=THREE.sRGBEncoding;
@@ -360,7 +361,7 @@ scene.fog=new THREE.Fog(0xdfe7ee,30,140);scene.background=new THREE.Color(0xdfe7
 const camera=new THREE.PerspectiveCamera(42,innerWidth/innerHeight,.3,400);
 addEventListener('resize',()=>{renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();});
 const hemi=new THREE.HemisphereLight(0xeaf2ff,0x8a97a8,.75);scene.add(hemi);
-const sun=new THREE.DirectionalLight(0xfff4e6,.85);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);
+const sun=new THREE.DirectionalLight(0xfff4e6,.85);sun.castShadow=true;sun.shadow.mapSize.set(IS_TOUCH?1024:2048,IS_TOUCH?1024:2048);
 Object.assign(sun.shadow.camera,{left:-32,right:32,top:32,bottom:-32,near:1,far:140});sun.shadow.bias=-.0006;sun.shadow.normalBias=.03;
 scene.add(sun);scene.add(sun.target);
 const moon=new THREE.PointLight(0x9fb6ff,0,40,1.2);scene.add(moon);
@@ -456,8 +457,10 @@ function spruceGeo(seed,o={}){
  g.setIndex(idx);g.computeVertexNormals();return g;
 }
 // инстансы, разбитые на участки: невидимые участки отсекаются камерой и тенью (важно для телефонов)
-const TREE_LOD=[],TREE_NEAR=75; // куски леса с подробной моделью: вблизи камеры — она, дальше — простая
-function updateTreeLOD(){const c=camera.position;for(const L of TREE_LOD){const n=Math.hypot(L.x-c.x,L.z-c.z)<TREE_NEAR+L.r;L.far.visible=!n;L.near.visible=n;}}
+const TREE_LOD=[],TREE_NEAR=IS_TOUCH?22:35; // куски леса с подробной моделью: вблизи игрока — она, дальше — простая (было 75 м — рисовалось ~14 млн треугольников)
+// вблизи простая ель не исчезает, а становится невидимой и только отбрасывает тень: тень от лёгкой модели вместо 28 тыс. треугольников Tripo
+const SHADOW_ONLY=new THREE.MeshBasicMaterial({colorWrite:false,depthWrite:false});
+function updateTreeLOD(){const c=(typeof P!=='undefined'&&P)?P:camera.position;for(const L of TREE_LOD){const n=Math.hypot(L.x-c.x,L.z-c.z)<TREE_NEAR+L.r;if(L.n===n)continue;L.n=n;L.far.material=n?SHADOW_ONLY:L.farMat;L.near.visible=n;}}
 // подробная ель для ближнего плана: та же форма, что у дальней, но вдвое больше ярусов и лап, со всех сторон
 function nearSpruce(seed,o,mat){const p=Object.assign({},o);p.N=Math.round((o.N||11)*1.9);p.dense=1.8;return{geo:spruceGeo(seed,p),mat};}
 function tripoSpruce(h0){ // ель из Tripo (текст→3D, объёмная со всех сторон): основание в нуле, высота как у процедурной
@@ -526,7 +529,7 @@ function instChunks(geo,mat,list,cast=true,CH=40,near=null){
   im.castShadow=cast;im.receiveShadow=true;im.frustumCulled=true;scene.add(im); // в r128 у InstancedMesh отсечение по умолчанию выключено
   if(near){const g2=new THREE.BufferGeometry();for(const a in near.geo.attributes)g2.setAttribute(a,near.geo.attributes[a]);g2.setIndex(near.geo.index);g2.boundingSphere=g.boundingSphere.clone();
    const im2=new THREE.InstancedMesh(g2,near.mat,L.length);im2.position.copy(im.position);for(let i=0;i<L.length;i++){im.getMatrixAt(i,_m4);im2.setMatrixAt(i,_m4);}
-   im2.castShadow=cast;im2.receiveShadow=true;im2.frustumCulled=true;im2.visible=false;scene.add(im2);TREE_LOD.push({x:cx,z:cz,r:rad,far:im,near:im2});}
+   im2.castShadow=false;im2.receiveShadow=true;im2.frustumCulled=true;im2.visible=false;scene.add(im2);TREE_LOD.push({x:cx,z:cz,r:rad,far:im,near:im2,farMat:mat,n:false});}
  }
 }
 // снег на верхних гранях моделей (камни, поленницы, пни)
@@ -2280,7 +2283,8 @@ function update(dt){
  G.throwCd-=dt;G.flash=Math.max(0,G.flash-dt*1.5);G.shake=Math.max(0,G.shake-dt);G.growl-=dt;
  if(P.climb){updateClimb(dt);setHeroAnim();return;}
  let mx=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0),mz=(keys.KeyS||keys.ArrowDown?1:0)-(keys.KeyW||keys.ArrowUp?1:0);
- if(window.JOY&&JOY.on){mx=JOY.x;mz=JOY.z;}const wgt=weight(),MW=maxW();P.moving=!!(mx||mz);
+ if(window.JOY&&JOY.on){mx=JOY.x;mz=JOY.z;} // сенсорный джойстик: плавное направление вместо 8 рывков
+ const wgt=weight(),MW=maxW();P.moving=!!(mx||mz);
  // выносливость: бег быстро её съедает; запыхавшись, бежать нельзя, пока не отдышитесь. Усталость замедляет восстановление
  if(P.stam<=0)P.winded=true;else if(P.stam>=30)P.winded=false;
  P.sprinting=!!(P.moving&&(keys.ShiftLeft||keys.ShiftRight)&&!P.winded&&P.rest>5&&wgt<=MW&&!P.aff.hypo&&!P.onTower);
@@ -2819,7 +2823,11 @@ function makeIcons(){
 #tcBtns{position:absolute;right:14px;bottom:14px;display:grid;grid-template-columns:repeat(3,64px);gap:10px}
 #tcTop{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);display:flex;gap:6px}
 #tc.menu #tcTop{left:auto;right:10px;top:10px;bottom:auto;transform:none}
-body.touch #help{display:none!important} body.touch #vitals{top:max(8px,env(safe-area-inset-top));left:max(10px,env(safe-area-inset-left));bottom:auto;flex-direction:row;gap:6px} body.touch #vitals .ring{width:38px;height:38px}body.touch #vitals .ring span{font-size:15px}body.touch #vitals .lbl{display:none} body.touch #screen{overflow:auto;touch-action:pan-y;align-items:flex-start} @media (max-height:520px){body.touch #screen .box{zoom:.62;margin-block:16px}}
+body.touch #help{display:none!important}
+body.touch #vitals{top:max(8px,env(safe-area-inset-top));left:max(10px,env(safe-area-inset-left));bottom:auto;flex-direction:row;gap:6px}
+body.touch #vitals .ring{width:38px;height:38px}body.touch #vitals .ring span{font-size:15px}body.touch #vitals .lbl{display:none}
+body.touch #screen{overflow:auto;touch-action:pan-y;align-items:flex-start}
+@media (max-height:520px){body.touch #screen .box{zoom:.62;margin-block:16px}}
 #tcRot{display:none}
 @media (orientation:portrait){body.touch #tcRot{display:flex;position:fixed;inset:0;z-index:999;background:#0b1520;color:#e8eef4;flex-direction:column;align-items:center;justify-content:center;gap:18px;font-size:20px;text-align:center;padding:24px}}
 #tcRot .ph{width:60px;height:100px;border:4px solid #e8eef4;border-radius:12px;animation:tcR 2s ease-in-out infinite}
@@ -2862,13 +2870,15 @@ html,body{overscroll-behavior:none}canvas{touch-action:none}
   b.addEventListener('touchend',e=>{e.preventDefault();if(!hold)fire('keyup',code);},{passive:false});
  });
  // джойстик
- window.JOY={x:0,z:0,on:false};let sid=null,cx=0,cy=0;const DEAD=10;function setDir(dx,dy){const l=Math.hypot(dx,dy);if(l<DEAD){JOY.on=false;JOY.x=JOY.z=0;return;}JOY.on=true;JOY.x=dx/l;JOY.z=dy/l;} const canStick=t=>screen.hidden&&typeof G!=='undefined'&&G&&!G.over&&!menuOpts&&t.clientX<innerWidth/2&&!(t.target.closest&&t.target.closest('button,#tcTop,#tcBtns,.panel,#inv,#map,#modal,#find')); document.addEventListener('touchstart',e=>{if(sid!==null)return;const t=e.changedTouches[0];if(!canStick(t))return;e.preventDefault();sid=t.identifier;cx=t.clientX;cy=t.clientY;setDir(0,0);},{passive:false,capture:true}); document.addEventListener('touchmove',e=>{for(const t of e.changedTouches)if(t.identifier===sid){e.preventDefault();setDir(t.clientX-cx,t.clientY-cy);}},{passive:false,capture:true}); const end=e=>{for(const t of e.changedTouches)if(t.identifier===sid){sid=null;setDir(0,0);}}; document.addEventListener('touchend',end,true);document.addEventListener('touchcancel',end,true); /* старый джойстик:
- function setDir(dx,dy){const l=Math.hypot(dx,dy),k=l>R?R/l:1;knob.style.transform=`translate(${dx*k}px,${dy*k}px)`;
-  const nx=dx/R,ny=dy/R;keys.KeyD=nx>D;keys.KeyA=nx<-D;keys.KeyS=ny>D;keys.KeyW=ny<-D;}
- stick.addEventListener('touchstart',e=>{e.preventDefault();const t=e.changedTouches[0];sid=t.identifier;const r=stick.getBoundingClientRect();cx=r.left+r.width/2;cy=r.top+r.height/2;setDir(t.clientX-cx,t.clientY-cy);},{passive:false});
- stick.addEventListener('touchmove',e=>{e.preventDefault();for(const t of e.changedTouches)if(t.identifier===sid)setDir(t.clientX-cx,t.clientY-cy);},{passive:false});
+ // невидимый плавающий джойстик: касание в любом месте левой половины экрана = центр, направление = куда ведёшь палец
+ window.JOY={x:0,z:0,on:false};
+ let sid=null,cx=0,cy=0;const DEAD=10;
+ function setDir(dx,dy){const l=Math.hypot(dx,dy);if(l<DEAD){JOY.on=false;JOY.x=JOY.z=0;return;}JOY.on=true;JOY.x=dx/l;JOY.z=dy/l;}
+ const canStick=t=>screen.hidden&&typeof G!=='undefined'&&G&&!G.over&&!menuOpts&&t.clientX<innerWidth/2&&!(t.target.closest&&t.target.closest('button,#tcTop,#tcBtns,.panel,#inv,#map,#modal,#find'));
+ document.addEventListener('touchstart',e=>{if(sid!==null)return;const t=e.changedTouches[0];if(!canStick(t))return;e.preventDefault();sid=t.identifier;cx=t.clientX;cy=t.clientY;setDir(0,0);},{passive:false,capture:true});
+ document.addEventListener('touchmove',e=>{for(const t of e.changedTouches)if(t.identifier===sid){e.preventDefault();setDir(t.clientX-cx,t.clientY-cy);}},{passive:false,capture:true});
  const end=e=>{for(const t of e.changedTouches)if(t.identifier===sid){sid=null;setDir(0,0);}};
- */
+ document.addEventListener('touchend',end,true);document.addEventListener('touchcancel',end,true);
  // зум двумя пальцами
  let pd=0;renderer.domElement.addEventListener('touchmove',e=>{if(e.touches.length===2){e.preventDefault();const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
   if(pd&&G)G.zoom=clamp(G.zoom+(pd-d)*.004,.55,2);pd=d;}},{passive:false});
