@@ -2874,7 +2874,7 @@ html,body{overscroll-behavior:none}canvas{touch-action:none}
   if(pd&&G)G.zoom=clamp(G.zoom+(pd-d)*.004,.55,2);pd=d;}},{passive:false});
  renderer.domElement.addEventListener('touchend',()=>{pd=0;});
  // видимость: прячем на стартовом экране, в меню оставляем только ✕
- setInterval(()=>{const inGame=screen.hidden&&typeof G!=='undefined'&&G&&!G.over;tc.classList.toggle('off',!inGame);
+ setInterval(()=>{if(renderer.domElement.clientWidth!==innerWidth||renderer.domElement.clientHeight!==innerHeight){renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();}const inGame=screen.hidden&&typeof G!=='undefined'&&G&&!G.over;tc.classList.toggle('off',!inGame);
   const inMenu=!!menuOpts||!!(typeof ST!=='undefined'&&ST);tc.classList.toggle('menu',inMenu&&!ST);if(inMenu&&sid===null)setDir(0,0);},150);
  // полноэкранный режим по первому касанию
  document.addEventListener('touchend',()=>{const d=document.documentElement;if(!document.fullscreenElement&&d.requestFullscreen)d.requestFullscreen().catch(()=>{});},{once:true});
