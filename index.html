@@ -2,8 +2,8 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-title" content="Белая тишина"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="robots" content="noindex,nofollow"><meta name="apple-mobile-web-app-title" content="Белая тишина"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Белая тишина 3D</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+SC:wght@500;700&family=Nunito:ital,wght@0,400;0,600;0,700;1,400&display=swap&subset=cyrillic" rel="stylesheet">
@@ -846,8 +846,11 @@ function updateDoors(dt){
  for(const o of objs){if(o.kind!=='door')continue;
   // автодверь: открывается, когда герой подходит, и закрывается, когда он отошёл от проёма (внутрь или наружу)
   if(started&&!P.climb){const dd=dist(P.x,P.z,o.x,o.z);
-   if(!o.open&&dd<1.7){o.open=true;o.vel+=1.5;}
-   else if(o.open&&dd>2.6){const c=o.col,r=.42;if(!(c&&P.x+r>c.x0&&P.x-r<c.x1&&P.z+r>c.z0&&P.z-r<c.z1)){o.open=false;o.vel-=1.2;}}}
+   if(!o.open&&dd<1.6){o.open=true;o.vel+=1.5;}
+   else if(o.open&&dd>1.9){const c=o.col,r=.6;if(!(c&&P.x+r>c.x0&&P.x-r<c.x1&&P.z+r>c.z0&&P.z-r<c.z1)){o.open=false;o.vel-=1.2;}}
+   // помощь в проёме: если герой у двери упирается в косяк, мягко подтягиваем его к центру проёма
+   if(o.open&&dd<1.5&&P.moving){const c=o.col;if(o.ns){const k=(o.x-P.x)*Math.min(1,dt*6);if(Math.abs(o.x-P.x)>.05&&!blockedAt(P.x+k,P.z,.42))P.x+=k;}
+    else{const k=(o.z-P.z)*Math.min(1,dt*6);if(Math.abs(o.z-P.z)>.05&&!blockedAt(P.x,P.z+k,.42))P.z+=k;}}}
   const tgt=o.open?1.6:0;
   if(Math.abs(o.vel)<.002&&Math.abs(o.ang-tgt)<.002)continue;
   o.vel+=((tgt-o.ang)*36-o.vel*(o.open?6.5:4))*dt;o.ang+=o.vel*dt;
@@ -927,7 +930,7 @@ function buildHouse(def){
  // теплоизоляция (на сколько градусов внутри теплее, чем снаружи) и мощность печи для этой площади:
  // будки на льду почти не держат тепло, маленькую хижину печь прогревает быстро, большой дом — слабо
  const area=W*D;b.area=area;
- b.ins=def.kind==='fish'?(def.noDoor?2.5:5):area<45?11:area<100?13:15;
+ b.ins=def.kind==='fish'?(def.noDoor?2:4):area<45?7:area<100?8:9.5; // без печи в доме прохладно: днём около 0…+4°, ночью в минус
  b.heat=clamp(700/area+8,10,30);
  b.floor=[];for(let i=0;i<def.w;i++)for(let j=0;j<def.d;j++)b.floor.push(place('h:floor-wood',x0+(i+.5)*S,y0,z0+(j+.5)*S,0,S,false));
  const doorIdx=def.door==='S'||def.door==='N'?Math.floor(def.w/2):Math.floor(def.d/2);
@@ -1089,7 +1092,13 @@ function furnish(b){
    g.position.set(s.x,y,s.z);g.rotation.y=s.ry;scene.add(g);addCol({x:s.x,z:s.z,r:.6});objs.push({kind:'radio',x:s.x,z:s.z,y,mesh:g,led,on:false,b});}}
  const n=b.kind==='start'?1:b.kind==='office'||b.kind==='depot'?ri(3,5):b.kind==='fish'?1:ri(1,3);
  for(let i=0;i<n;i++){const s=take();if(!s)break;const f=b.kind==='start'?FURN.box:pick(Object.values(FURN));
-  const m=place(f[0],s.x,y,s.z,s.ry,fitScale(f[0],f[1]*fs));colBB(m,.08);
+  const m=place(f[0],s.x,y,s.z,s.ry,fitScale(f[0],f[1]*fs));
+  // мебель не должна торчать из стены: сдвигаем её внутрь комнаты (зазор 12 см от внутренней стены)
+  {m.updateMatrixWorld(true);const bb=new THREE.Box3().setFromObject(m),g=.12+.15;let dx=0,dz=0;
+   if(bb.min.x<b.x0+g)dx=b.x0+g-bb.min.x;else if(bb.max.x>b.x1-g)dx=b.x1-g-bb.max.x;
+   if(bb.min.z<b.z0+g)dz=b.z0+g-bb.min.z;else if(bb.max.z>b.z1-g)dz=b.z1-g-bb.max.z;
+   m.position.x+=dx;m.position.z+=dz;s.x+=dx;s.z+=dz;}
+  colBB(m,.08);
   // содержимое выпадает при первом обыске (с учётом сложности); уникальные вещи кладутся заранее в fixed
   objs.push({kind:'box',x:s.x,z:s.z,y,name:f[2],mesh:m,loot:null,fixed:b.kind==='start'?{...START_LOOT}:{},lk:b.kind==='start'?'none':b.kind,searched:false,b});}
  if(rnd()<.6){const s=take();if(s){place('h:lantern',s.x,y,s.z,0,.9);addCol({x:s.x,z:s.z,r:.2});}}
@@ -1233,7 +1242,8 @@ function buildTower(x,z){
 function climbTower(arg,dir){
  const tw=arg.tower||arg;if(P.climb)return;
  if(dir>0&&weight()>maxW()){log('С таким грузом по лестнице не залезть','bad');return;}
- const path=dir>0?[[0,3.0,0],[0,2.3,0],[0,1.5,tw.Ht],[0,.9,tw.Ht]]:[[0,.9,tw.Ht],[0,1.5,tw.Ht],[0,2.3,0],[0,3.0,0]];
+ // герой висит чуть позади лестницы (+0,4 м), а не внутри неё
+ const path=dir>0?[[0,3.1,0],[0,2.7,0],[0,1.9,tw.Ht],[0,.9,tw.Ht]]:[[0,.9,tw.Ht],[0,1.9,tw.Ht],[0,2.7,0],[0,3.1,0]];
  P.climb={tw,dir,t:0,dur:4.2,path};P.onTower=null;P.a=tw.ry+(dir>0?Math.PI:0);
 }
 function updateClimb(dt){
@@ -1241,9 +1251,13 @@ function updateClimb(dt){
  // три отрезка: подойти к лестнице, лезть, шагнуть на площадку (или наоборот)
  const segT=[.08,.9,1],k=u<segT[0]?0:u<segT[1]?1:2,a=k?segT[k-1]:0,f=(u-a)/(segT[k]-a);
  const A=p[k],B=p[k+1],lz=lerp(A[1],B[1],f),ly=lerp(A[2],B[2],f),w=c.tw.W(A[0],lz);
- P.x=w.x;P.z=w.z;P.yOver=c.tw.y0+ly;P.moving=k!==1;P.a=c.tw.ry+Math.PI;
+ // на лестнице — перехват за перекладины: рывок вверх на каждую ступень и покачивание корпуса
+ const step=k===1?Math.abs(Math.sin(c.t*Math.PI*2.2))*.12:0;
+ P.x=w.x;P.z=w.z;P.yOver=c.tw.y0+ly+step;P.moving=true;P.sprinting=false;P.a=c.tw.ry+Math.PI;
+ if(hero){hero.rotation.x=k===1?-.12:0;hero.rotation.z=k===1?Math.sin(c.t*Math.PI*2.2)*.09:0;}
+ if(heroAnim&&heroAnim.acts.walk)heroAnim.acts.walk.timeScale=(heroAnim.walkTS||1)*(k===1?.6:1);
  G.min+=dt*1.5;updateWorld(dt*1.5); // ~6 игровых минут на подъём
- if(u>=1){P.climb=null;P.moving=false;
+ if(u>=1){P.climb=null;P.moving=false;if(hero){hero.rotation.x=0;hero.rotation.z=0;}if(heroAnim&&heroAnim.acts.walk)heroAnim.acts.walk.timeScale=heroAnim.walkTS||1;
   if(c.dir>0){P.onTower=c.tw;P.yOver=c.tw.y0+c.tw.Ht;G.zoom=Math.max(G.zoom,1.6);revealFromTower(c.tw);}
   else{P.onTower=null;P.yOver=undefined;P.yv=undefined;G.zoom=Math.min(G.zoom,1);}}
 }
@@ -1567,7 +1581,7 @@ function makeHero(){
  // темп ходьбы/бега под скорость в игре (2,5 м/с шагом, ~4,6 м/с бегом), чтобы ноги не «скользили»:
  // в анимации на месте опорная стопа едет назад со скоростью земли — её и меряем
  const sp=a=>a?clipSpeed(g,a.getClip(),hs):0,vw=sp(heroAnim.acts.walk),vr=sp(heroAnim.acts.run);
- if(vw)heroAnim.acts.walk.timeScale=clamp(2.5/vw,.6,2);
+ if(vw)heroAnim.acts.walk.timeScale=clamp(2.5/vw,.6,2);if(heroAnim.acts.walk)heroAnim.walkTS=heroAnim.acts.walk.timeScale;
  if(vr)heroAnim.acts.run.timeScale=clamp(4.6/vr,.6,2);
  HERO_SPEEDS={walk:vw,run:vr};
  play(heroAnim,'idle',0);
@@ -1683,6 +1697,7 @@ function addPrint(x,z,a,side,t){const m=new THREE.Mesh(printGeo,MAT.print);m.pos
 // =====================================================================
 let G,P,WX;
 function newGame(){
+ if(hero){hero.visible=true;hero.rotation.x=hero.rotation.z=0;}
  G={min:9*60,over:false,rescueAt:0,heli:false,spawnT:180,flash:0,shake:0,growl:0,throwCd:0,frost:0,zone:null,visited:new Set(),seen:new Set(),breath:0,zoom:1,duskDay:0,restockDay:1};
  ST=null;{const e=document.getElementById('strug');if(e)e.style.display='none';}
  P={bleed:0,x:START.x,z:START.z,a:0,warm:75,food:65,water:60,rest:80,hp:100,stam:100,winded:false,worn:{},cc:{},torch:0,rod:100,
@@ -1716,7 +1731,7 @@ function tempInfo(sleep,bed){
  // насколько герой открыт ветру: будка на льду продувается, дом с открытой дверью — чуть-чуть, на вышке ветер сильнее
  const exp=b?(b.kind==='fish'?(b.noDoor||(b.doorObj&&b.doorObj.open)?.35:.15):(b.doorObj&&b.doorObj.open?.08:0)):cave?.15:P.onTower?1.4:1;
  const wp=windProof(),wind=-WX.wind*exp*(1-wp),cloth=clothWarm(),fire=radiant(P.x,P.z)+(P.torch>0?2:0);
- const act=sleep?0:P.sprinting?3:P.moving?1:0,bedB=sleep?(bed?9:P.inv.bedroll?7:0):0;
+ const act=sleep?0:P.sprinting?3:P.moving?1:0,bedB=sleep?(bed?6:P.inv.bedroll?5:0):0;
  return{air,base,where:b?'room':cave?'cave':'out',wind,wp,cloth,fire,act,bed:bedB,felt:base+wind+cloth+fire+act+bedB};
 }
 function maxW(){return BASE_W-(P.rest<25?5:0)-(P.aff.hypo?3:0);}
@@ -1777,6 +1792,7 @@ function passTime(min,opt={}){
  while(t<min&&!G.over){const st=Math.min(5,min-t);t+=st;G.min+=st;updateWorld(st,opt);
   if(opt.sleep){
    if(P.warm<10){msg='Вы проснулись от холода!';break}
+   if(tempInfo(true,opt.bed).felt<0){msg='Стало слишком холодно — вы проснулись!';break}
    if(P.hp<25&&P.warm<50){msg='Вы проснулись — вам очень плохо.';break}
    if(P.rest>=100){msg='Вы выспались.';break}
    if(!P.inB&&!inCave(P.x,P.z)&&!nearFire(P.x,P.z,6)&&rnd()<st/60*.12*DIFF.wDetect*(darkness()>.5?2:1)){wolfBite(null);msg='Волк напал на вас во сне!';break}
@@ -1902,14 +1918,15 @@ function renderInv(){
  INV.ids=all.filter(id=>INV.cat==='all'||ITEMS[id].cat===INV.cat);
  if(INV.sel>=INV.ids.length)INV.sel=Math.max(0,INV.ids.length-1);
  const cols=invCols(),slots=Math.max(cols*4,Math.ceil(INV.ids.length/cols)*cols);
- let g='';for(let i=0;i<slots;i++){const id=INV.ids[i];g+=id?`<div class="slot${i===INV.sel&&!INV.worn?' sel':''}" data-i="${i}" title="${ITEMS[id].n}"><div class="ic" style="${iconCss(id,68)}"></div><span class="n">${P.inv[id]>1?P.inv[id]:''}</span></div>`:'<div class="slot empty"></div>';}
+ let g='';for(let i=0;i<slots;i++){const id=INV.ids[i];g+=id?`<div class="slot${i===INV.sel&&!INV.worn?' sel':''}" data-i="${i}" title="${ITEMS[id].n}"><div class="ic" style="${iconCss(id,68)}"></div><span class="n">${P.inv[id]>1?P.inv[id]:''}${P.left&&P.left[id]?' ½':''}</span></div>`:'<div class="slot empty"></div>';}
  document.getElementById('grid').innerHTML=g;
  const det=document.getElementById('detail');
  if(INV.worn){renderWornDetail(det);return;}
  const id=INV.ids[INV.sel];
  if(!id){det.innerHTML=`<div style="margin:auto;text-align:center;color:var(--dim)">${all.length?'В этой вкладке пусто':'Рюкзак пуст.<br>Обыскивайте дома и собирайте ветки.'}</div>`;return;}
  const it=ITEMS[id],u=it.use,fx=[];
- if(u){if(u.kc)fx.push(`<span class="p">+${u.kc} ккал (${Math.round(u.kc/KCAL*100)}%)</span>`);if(u.water)fx.push(`<span class="${u.water>0?'p':'m'}">Вода ${u.water>0?'+':''}${u.water}%</span>`);
+ const lf=P.left&&P.left[id];
+ if(u){if(u.kc)fx.push(lf?`<span class="p">Начато: остаток ${Math.round(u.kc*lf)} ккал</span>`:`<span class="p">+${u.kc} ккал (${Math.round(u.kc/KCAL*100)}%)</span>`);if(u.water)fx.push(`<span class="${u.water>0?'p':'m'}">Вода ${u.water>0?'+':''}${u.water}%</span>`);
   if(u.rest)fx.push(`<span class="p">Бодрость +${u.rest}</span>`);if(u.hp)fx.push(`<span class="p">Здоровье +${u.hp}</span>`);if(u.risk)fx.push(`<span class="m">Риск ${Math.round(u.risk*100)}%: ${id==='water_raw'?'расстройство':'отравление'}</span>`);}
  if(it.s){const c=(P.cc[id]||[])[P.cc[id]?P.cc[id].length-1:0]||{c:70};fx.push(`<span class="p">Тепло +${it.t}°</span>`,`<span class="p">Ветер −${Math.round(it.wp*100)}%</span>`,`<span>Состояние ${Math.round(c.c)}%${c.fur?' · мех':''}</span>`);}
  if(it.burn)fx.push(`<span class="p">Горение +${fmtDur(it.burn)}</span>`);
@@ -1984,7 +2001,13 @@ function useItem(id){
  const it=ITEMS[id],u=it.use;if(!u||!P.inv[id])return;
  if(it.s){wear(id);return;}
  if(id==='cells'){if(!P.inv.flash){log('Сначала найдите фонарик','bad');return;}take(id);P.flashBat=240;log('Новые батарейки: фонарик заряжен на 4 часа','good');return;}
- if(u.kc)P.food=clamp(P.food+u.kc/KCAL*100);if(u.water)P.water=clamp(P.water+u.water);if(u.hp)P.hp=clamp(P.hp+u.hp);if(u.rest)P.rest=clamp(P.rest+u.rest);
+ // еда съедается не целиком, если столько не нужно: остаток остаётся в рюкзаке («начато, осталось N ккал»)
+ if(u.kc>=150){P.left=P.left||{};const fr=P.left[id]||1,avail=u.kc*fr,need=(100-P.food)/100*KCAL;
+  if(need<20){log('Вы сыты');return;}
+  if(need<avail-25){const k=need/u.kc;P.food=100;if(u.water)P.water=clamp(P.water+u.water*k);if(u.hp)P.hp=clamp(P.hp+u.hp*k);if(u.rest)P.rest=clamp(P.rest+u.rest*k);
+   P.left[id]=fr-k;SFX.eat&&SFX.eat();log(`Съели ${Math.round(need)} ккал — ${it.n}: остаток ${Math.round(avail-need)} ккал`);return;}
+  const k=fr;delete P.left[id];P.food=clamp(P.food+avail/KCAL*100);if(u.water)P.water=clamp(P.water+u.water*k);if(u.hp)P.hp=clamp(P.hp+u.hp*k);if(u.rest)P.rest=clamp(P.rest+u.rest*k);}
+ else{if(u.kc)P.food=clamp(P.food+u.kc/KCAL*100);if(u.water)P.water=clamp(P.water+u.water);if(u.hp)P.hp=clamp(P.hp+u.hp);if(u.rest)P.rest=clamp(P.rest+u.rest);}
  take(id);
  if(id==='bandage'&&P.bleed){P.bleed=0;log('Кровотечение остановлено','good');}
  if(id==='pills'){const had=P.aff.poison||P.aff.dys;delete P.aff.poison;delete P.aff.dys;log(had?'Антибиотики подействовали: недуг отступил':'Вы приняли антибиотики',had?'good':'');return;}
@@ -2014,13 +2037,17 @@ function openFireMenu(f){
 }
 function nearBed(){return P.inB&&objs.some(o=>o.kind==='bed'&&dist(o.x,o.z,P.x,P.z)<2.6);}
 function openSleep(){
- if(P.rest>85){log('Вы не чувствуете усталости');return;}
- if(P.onTower){log('На вышке не уснуть — спуститесь');return;}
  const bed=nearBed(),ti=tempInfo(true,bed),wr=warmRate(ti.felt);
  const where=bed?'Кровать':P.inv.bedroll?'Спальник':P.inB?'Голый пол':'Под открытым небом';
- const sub=`${where} · во сне ощущается ${fmtT(ti.felt)}. `+(wr<0?`Будете мёрзнуть (${Math.round(wr)}%/ч) — проснётесь от холода.`:'Тепло, можно спать спокойно.')+(!P.inB&&!inCave(P.x,P.z)&&!nearFire(P.x,P.z,6)?' Без огня вокруг — волки.':'');
- openMenu('sleep',where,sub,[1,2,4,8].map(h=>({label:`Спать ${h} ч`,act:()=>{closeMenu();doSleep(h*60,bed);}})));
+ const tired=P.rest<=85,cold=ti.felt<0,tower=!!P.onTower;
+ const why=tower?'на вышке не уснуть':!tired?'вы не устали':cold?'слишком холодно, чтобы уснуть':'';
+ const sub=`${where} · во сне ощущается ${fmtT(ti.felt)}. `+(why?`Спать нельзя: ${why}. Можно просто переждать время.`:wr<0?`Будете мёрзнуть (${Math.round(wr)}%/ч).`:'Тепло, можно спать спокойно.')+(!P.inB&&!inCave(P.x,P.z)&&!nearFire(P.x,P.z,6)?' Без огня вокруг — волки.':'');
+ const opts=[1,2,4,8].map(h=>({label:`Спать ${h} ч`,dis:!!why,act:()=>{closeMenu();doSleep(h*60,bed);}}));
+ for(const h of[1,3])opts.push({label:`Переждать ${h} ч`,sub:'не спать, просто ждать',act:()=>{closeMenu();doWait(h*60);}});
+ openMenu('sleep',where,sub,opts);
 }
+function doWait(min){const f=document.getElementById('fade');f.style.opacity=.6;
+ setTimeout(()=>{const r=passTime(min,{stop:()=>P.warm<=15,stopMsg:'Вы замёрзли — ждать дальше опасно'});f.style.opacity=0;if(!G.over){log(r||`Прошло ${fmtDur(min)}`,r?'bad':'');saveGame();}},400);}
 function doSleep(min,bed){const f=document.getElementById('fade');f.style.opacity=.9;
  setTimeout(()=>{const r=passTime(min,{sleep:true,bed});f.style.opacity=0;if(!G.over){log(r||'Вы проснулись',r&&r.includes('!')?'bad':'');saveGame();}},450);}
 // ---------- карта ----------
@@ -2109,7 +2136,7 @@ document.getElementById('map').addEventListener('wheel',e=>{e.preventDefault();M
 // =====================================================================
 function findTarget(){
  let best=null,bd=2.1;
- for(const o of objs){if(o.kind==='ash'||(o.kind==='fire'&&o.stove))continue;if(!!o.top!==!!P.onTower)continue; // на вышке доступен только спуск
+ for(const o of objs){if(o.kind==='ash'||o.kind==='door'||(o.kind==='fire'&&o.stove))continue; // двери автоматическиеif(!!o.top!==!!P.onTower)continue; // на вышке доступен только спуск
   const d=dist(o.x,o.z,P.x,P.z);if(d<bd){bd=d;best={o};}}
  if(best||P.onTower)return best;
  for(const t of trees){if(t.uses>=2)continue;const d=dist(t.x,t.z,P.x,P.z);if(d<1.7&&d<bd+.2){bd=d;best={tree:t};}}
@@ -2262,10 +2289,10 @@ function wolfBite(w){
 }
 function endStruggle(ok){
  const w=ST.w;ST=null;strEl.style.display='none';w.state='flee';w.t=6;w.cool=25;
+ hero.rotation.x=0;hero.rotation.z=0;w.mesh.rotation.x=0;heroAnim.cur=null;play(heroAnim,'idle',.25); // без «сломанной» анимации удара
  wearOut(ok?rr(4,9):rr(12,22),['outer','legs','hands']); // волк рвёт одежду
  if(ok){P.hp=clamp(P.hp-5*DIFF.wDmg);P.cause='wolf';G.shake=.3;log('Вы отбились! Волк отскочил.','good');if(rnd()<.35)bleed();}
- else{P.hp=clamp(P.hp-(24+rnd()*10)*DIFF.wDmg);P.warm=clamp(P.warm-5);P.cause='wolf';G.flash=1;G.shake=.6;bleed(true);log('Волк искусал вас!','bad');
-  if(heroAnim.acts.hit){heroAnim.cur=null;play(heroAnim,'hit',.05,true);}}
+ else{P.hp=clamp(P.hp-(24+rnd()*10)*DIFF.wDmg);P.warm=clamp(P.warm-5);P.cause='wolf';G.flash=1;G.shake=.6;bleed(true);log('Волк искусал вас!','bad');}
  if(P.hp<=0)die('wolf');
 }
 
@@ -2279,6 +2306,14 @@ function update(dt){
  if(ST){ST.t+=dt;ST.prog=Math.max(0,ST.prog-dt*.3);strFill.style.width=Math.min(100,ST.prog*100)+'%';
   P.moving=false;P.sprinting=false;setHeroAnim();
   G.flash=Math.max(G.flash,.25);G.shake=Math.max(G.shake,.2);
+  // анимация схватки: волк висит на герое и рвёт, герой отклоняется и отталкивает его (каждое E — толчок)
+  {const w=ST.w,t=ST.t;ST.kick=Math.max(0,(ST.kick||0)-dt*4);
+   const da=Math.atan2(w.x-P.x,w.z-P.z);P.a=da;
+   const lunge=.15*Math.max(0,Math.sin(t*9)),d=.95-lunge+ST.kick*.6,side=Math.sin(t*5.3)*.12;
+   w.x=P.x+Math.sin(da)*d+Math.cos(da)*side;w.z=P.z+Math.cos(da)*d-Math.sin(da)*side;w.a=da+Math.PI+Math.sin(t*7)*.25;
+   if(w.anim.acts.attack&&!(w.anim.cur===w.anim.acts.attack&&w.anim.cur.isRunning())){w.anim.cur=null;play(w.anim,'attack',.05,true);}
+   w.anim.mixer.update(dt);w.mesh.position.set(w.x,groundY(w.x,w.z)+.25*Math.max(0,Math.sin(t*9)),w.z);w.mesh.rotation.y=w.a;w.mesh.rotation.x=-.35-.15*Math.sin(t*9);
+   hero.rotation.x=-.22-.08*Math.sin(t*9)+ST.kick*.5;hero.rotation.z=Math.sin(t*4.1)*.12;}
   if(ST.prog>=1)endStruggle(true);else if(ST.t>=4)endStruggle(false);return;}
  G.throwCd-=dt;G.flash=Math.max(0,G.flash-dt*1.5);G.shake=Math.max(0,G.shake-dt);G.growl-=dt;
  if(P.climb){updateClimb(dt);setHeroAnim();return;}
@@ -2401,7 +2436,7 @@ function frameVisuals(dt){
  let gy;
  if(P.yOver!==undefined)gy=P.yOver; // на лестнице и на площадке вышки
  else{const gyRaw=heightAt(P.x,P.z,P.yv);P.yv=P.yv===undefined?gyRaw:P.yv+(gyRaw-P.yv)*Math.min(1,dt*10);if(Math.abs(P.yv-gyRaw)>3)P.yv=gyRaw;gy=P.yv;}
- updateDoors(dt);GRASS_U.uTime.value+=dt;
+ updateDoors(dt);GRASS_U.uTime.value+=dt;if(G&&G.cine)updateCine(dt);
  hero.position.set(P.x,gy,P.z);
  if(caveRoof)caveRoof.visible=!inCave(P.x,P.z);hero.rotation.y=P.a;heroAnim.mixer.update(dt);
  // у Remy нет анимации смерти: герой просто оседает и падает
@@ -2538,7 +2573,41 @@ function applySave(s){
 const CAUSES={blood:'Вы истекли кровью.',cold:'Вы замёрзли насмерть.',food:'Вы умерли от истощения.',water:'Вы умерли от обезвоживания.',rest:'Вы умерли от изнеможения.',wolf:'Вас загрызли волки.',poison:'Пищевое отравление оказалось смертельным.'};
 function die(c){if(G.over)return;G.over=true;G.dead=true;closeMenu();clearSave();const s=survived();saveBest(s.h);if(heroAnim.acts.death){heroAnim.cur=null;play(heroAnim,'death',.2,true);}
  setTimeout(()=>{box.innerHTML=`<h1>Тишина</h1><p>${CAUSES[c]||CAUSES.cold}</p><p>Вы продержались: <b>${s.txt}</b></p><div class="go">Enter — попробовать снова</div>`;screen.hidden=false;},1600);}
-function win(){if(G.over)return;G.over=true;closeMenu();clearSave();const s=survived();saveBest(s.h);
+// сцена спасения: вертолёт прилетает, садится рядом, герой идёт к нему и садится, вертолёт улетает — потом экран победы
+function makeHeli(){
+ const g=new THREE.Group(),M=(c,o={})=>new THREE.MeshStandardMaterial({color:c,roughness:.6,metalness:.2,...o}),add=(geo,mat,x,y,z)=>{const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);m.castShadow=true;g.add(m);return m;};
+ const or=M(0xe0602a),dk=M(0x2a2d33),gl=M(0x223344,{roughness:.1,metalness:.6});
+ add(new THREE.BoxGeometry(1.9,1.7,3.6),or,0,1.55,0);add(new THREE.BoxGeometry(1.7,1.1,1.2),gl,0,1.75,2.1);
+ add(new THREE.BoxGeometry(.45,.5,4.6),or,0,1.9,-3.9);add(new THREE.BoxGeometry(.12,1.2,.7),or,0,2.4,-6);
+ add(new THREE.BoxGeometry(.4,.4,.5),dk,0,2.55,0);
+ for(const s of[-1,1]){add(new THREE.BoxGeometry(.1,.1,3.8),dk,s*.95,.1,.2);for(const z of[-.8,1])add(new THREE.BoxGeometry(.08,.6,.08),dk,s*.9,.4,z);}
+ const rot=new THREE.Group();rot.position.set(0,2.85,0);g.add(rot);for(const a of[0,Math.PI/2]){const b=new THREE.Mesh(new THREE.BoxGeometry(10,.05,.3),dk);b.rotation.y=a;rot.add(b);}
+ const tr=new THREE.Group();tr.position.set(.12,2.4,-6.1);g.add(tr);{const b=new THREE.Mesh(new THREE.BoxGeometry(.05,1.5,.18),dk);tr.add(b);}
+ g.userData={rot,tr};return g;
+}
+function win(){if(G.over)return;G.over=true;closeMenu();
+ // свободная площадка: не на доме, не в деревьях и не на склоне
+ let hx=P.x+9,hz=P.z;
+ search:for(const r of[9,12,15,19,24])for(let i=0;i<16;i++){const a=i/16*TAU,x=P.x+Math.sin(a)*r,z=P.z+Math.cos(a)*r;
+  if(buildings.some(b=>x>b.x0-7&&x<b.x1+7&&z>b.z0-7&&z<b.z1+7))continue;
+  let ok=true;for(const[dx,dz]of[[0,0],[4,0],[-4,0],[0,4],[0,-4],[3,3],[-3,-3],[3,-3],[-3,3]])if(blockedAt(x+dx,z+dz,.5)||Math.abs(H(x+dx,z+dz)-H(x,z))>1.2){ok=false;break;}
+  if(trees.some(t=>dist(t.x,t.z,x,z)<6))ok=false;
+  if(ok){hx=x;hz=z;break search;}}
+ const gy=groundY(hx,hz);
+ const h=makeHeli();h.position.set(hx-60,gy+45,hz-60);h.rotation.y=Math.atan2(60,60);scene.add(h);
+ G.cine={t:0,h,hx,hz,gy,sx:h.position.x,sz:h.position.z};log('Вертолёт заходит на посадку!','good');
+}
+function updateCine(dt){
+ const c=G.cine,h=c.h;c.t+=dt;const t=c.t;h.userData.rot.rotation.y+=dt*28;h.userData.tr.rotation.x+=dt*35;
+ if(t<6){const u=t/6,e=1-Math.pow(1-u,3);h.position.set(lerp(c.sx,c.hx,e),c.gy+lerp(45,0,Math.min(1,u*1.15))+(u<1?Math.sin(t*2)*.1:0),lerp(c.sz,c.hz,e));h.rotation.x=(1-u)*.15;G.shake=Math.max(G.shake||0,.05*u);}
+ else if(t<10){h.position.set(c.hx,c.gy,c.hz);h.rotation.x=0;
+  if(t>7&&hero.visible){const da=Math.atan2(c.hx-P.x,c.hz-P.z),d=dist(P.x,P.z,c.hx,c.hz);P.a=da;
+   if(d>2.4){P.x+=Math.sin(da)*2.4*dt;P.z+=Math.cos(da)*2.4*dt;if(heroAnim.cur!==heroAnim.acts.walk){heroAnim.cur=null;play(heroAnim,'walk',.2);}}
+   else{hero.visible=false;c.board=t;}}}
+ else{const u=(t-10)/6;h.position.y=c.gy+u*u*40;h.position.x+=dt*u*25;h.rotation.x=-.12*Math.min(1,u*3);hero.visible=false;
+  if(t>16&&!c.done){c.done=true;showWin();}}
+}
+function showWin(){clearSave();const s=survived();saveBest(s.h);
  box.innerHTML=`<h1>Спасены</h1><p>Над лесом нарастает гул винтов. Вертолёт садится у поста лесника, и кто-то в оранжевой куртке машет вам рукой.</p><p>Вы продержались: <b>${s.txt}</b></p><div class="go">Enter — новая игра</div>`;screen.hidden=false;}
 let ready=false,started=false;
 // логова волков: глухие места (ельник, гарь, перевал, состав); ближайшие к старту — последними, на лёгком их меньше
@@ -2568,7 +2637,7 @@ addEventListener('keydown',e=>{
  if(e.code==='Tab'||e.code==='Space')e.preventDefault();
  if(!screen.hidden){if(started){if(e.code==='Enter'||e.code==='NumpadEnter'||e.code==='Space')startGame();return;}
   const m={Digit1:'easy',Digit2:'normal',Digit3:'hard',Numpad1:'easy',Numpad2:'normal',Numpad3:'hard',KeyC:'continue',Enter:readSave()?'continue':'normal'}[e.code];if(m)startGame(m);return;}
- if(ST){if((e.code==='KeyE'||e.code==='Space')&&!e.repeat){ST.prog+=.17;SFX.thud();}return;}
+ if(ST){if((e.code==='KeyE'||e.code==='Space')&&!e.repeat){ST.prog+=.17;ST.kick=1;SFX.thud();}return;}
  if(menuKind==='find'){if(e.code==='Escape'||e.code==='KeyQ')closeFind();else if(e.code==='Enter'||e.code==='KeyE'||e.code==='Space')takeAll();
   else{const m=e.code.match(/^(Digit|Numpad)([1-9])$/);if(m&&SR){const id=Object.keys(SR.o.loot)[+m[2]-1];if(id)takeFrom(id);}}return;}
  if(menuKind==='inv'){invKey(e);return;}
@@ -2625,8 +2694,8 @@ const SFX=(()=>{
    else if(ice)noise(.06,'highpass',2500,.12);
    else{noise(.12,'bandpass',1400+Math.random()*600,.22,1.2);noise(.06,'highpass',4000,.05);}}, // хруст снега
   // короткий деревянный «клац», как у кубической двери: два глухих удара без скрипа
-  door(open){const d2=open?.07:.05;noise(.06,'lowpass',open?700:520,.22,1.5);tone(open?150:120,open?90:70,.07,'triangle',.18,0,.003);
-   noise(.05,'lowpass',open?900:600,.14,1.5,d2);tone(open?190:140,100,.05,'triangle',.1,d2,.003);},
+  // мягкий звук двери: открытие — тихий шорох петли, закрытие — глухой стук (только при касании косяка)
+  door(open){if(open)noise(.3,'bandpass',380,.05,3);},
   bang(k){noise(.15,'lowpass',300,.35*k);tone(90,50,.18,'sine',.3*k);},
   growl(d){const v=vol(d,40);if(v<=0)return;const o=ac&&on&&ac.createOscillator();if(!o)return;const t=ac.currentTime,g=ac.createGain(),lfo=ac.createOscillator(),lg=ac.createGain();
    o.type='sawtooth';o.frequency.value=70;lfo.frequency.value=22;lg.gain.value=25;lfo.connect(lg).connect(o.frequency);
@@ -2674,7 +2743,7 @@ const SFX=(()=>{
    if(P.hp<st.hp-3)S.hurt();st.hp=P.hp;
    // дверь: открытие/закрытие и стук о косяк
    for(const o of objs)if(o.kind==='door'||o.pivot){if(o._so===undefined)o._so=o.open;if(o._so!==o.open){o._so=o.open;if(dist(P.x,P.z,o.x||P.x,o.z||P.z)<15)S.door(o.open);}
-    if(!o.open&&o.ang===0&&o._sa>0.02)S.bang(Math.min(1,o._sv||.5));o._sa=o.ang;o._sv=Math.abs(o.vel||0);}
+    if(!o.open&&o.ang===0&&o._sa>0.02&&dist(P.x,P.z,o.x||P.x,o.z||P.z)<15){noise(.1,'lowpass',220,.1*Math.min(1,o._sv||.5));}o._sa=o.ang;o._sv=Math.abs(o.vel||0);}
    // новый огонь
    let nf=0;for(const o of objs)if(o.kind==='fire')nf++;if(nf>st.fires)S.ignite();st.fires=nf;
   }
