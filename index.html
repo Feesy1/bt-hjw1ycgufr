@@ -2819,7 +2819,7 @@ function makeIcons(){
 #tcBtns{position:absolute;right:14px;bottom:14px;display:grid;grid-template-columns:repeat(3,64px);gap:10px}
 #tcTop{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);display:flex;gap:6px}
 #tc.menu #tcTop{left:auto;right:10px;top:10px;bottom:auto;transform:none}
-body.touch #help{display:none!important}
+body.touch #help{display:none!important} body.touch #vitals{top:max(8px,env(safe-area-inset-top));left:max(10px,env(safe-area-inset-left));bottom:auto;flex-direction:row;gap:6px} body.touch #vitals .ring{width:38px;height:38px}body.touch #vitals .ring span{font-size:15px}body.touch #vitals .lbl{display:none} body.touch #screen{overflow:auto;touch-action:pan-y;align-items:flex-start} @media (max-height:520px){body.touch #screen .box{zoom:.62;margin-block:16px}}
 #tcRot{display:none}
 @media (orientation:portrait){body.touch #tcRot{display:flex;position:fixed;inset:0;z-index:999;background:#0b1520;color:#e8eef4;flex-direction:column;align-items:center;justify-content:center;gap:18px;font-size:20px;text-align:center;padding:24px}}
 #tcRot .ph{width:60px;height:100px;border:4px solid #e8eef4;border-radius:12px;animation:tcR 2s ease-in-out infinite}
@@ -2833,7 +2833,7 @@ body.touch #help{display:none!important}
 #tc.menu #tcStick,#tc.menu #tcBtns{display:none}
 #tc.off{display:none}
 #tcEsc{display:none}#tc.menu #tcEsc{display:block}
-html,body{touch-action:none;overscroll-behavior:none}
+html,body{overscroll-behavior:none}canvas{touch-action:none}
 </style>
 <div id="tcRot"><div class="ph"></div>Поверните телефон горизонтально<small style="opacity:.6;font-size:14px">Если экран не поворачивается — отключите блокировку поворота</small></div>
 <div id="tc" class="off">
