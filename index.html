@@ -2280,7 +2280,7 @@ function update(dt){
  G.throwCd-=dt;G.flash=Math.max(0,G.flash-dt*1.5);G.shake=Math.max(0,G.shake-dt);G.growl-=dt;
  if(P.climb){updateClimb(dt);setHeroAnim();return;}
  let mx=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0),mz=(keys.KeyS||keys.ArrowDown?1:0)-(keys.KeyW||keys.ArrowUp?1:0);
- const wgt=weight(),MW=maxW();P.moving=!!(mx||mz);
+ if(window.JOY&&JOY.on){mx=JOY.x;mz=JOY.z;}const wgt=weight(),MW=maxW();P.moving=!!(mx||mz);
  // выносливость: бег быстро её съедает; запыхавшись, бежать нельзя, пока не отдышитесь. Усталость замедляет восстановление
  if(P.stam<=0)P.winded=true;else if(P.stam>=30)P.winded=false;
  P.sprinting=!!(P.moving&&(keys.ShiftLeft||keys.ShiftRight)&&!P.winded&&P.rest>5&&wgt<=MW&&!P.aff.hypo&&!P.onTower);
@@ -2830,7 +2830,7 @@ body.touch #help{display:none!important} body.touch #vitals{top:max(8px,env(safe
 #tcStick{width:130px;height:130px}#tcBtns{grid-template-columns:repeat(3,58px);gap:8px}#tcBtns button{width:58px;height:58px}
 #tc button.on{background:rgba(255,255,255,.45);color:#000}
 #tc button.big{background:rgba(60,110,150,.6)}
-#tc.menu #tcStick,#tc.menu #tcBtns{display:none}
+#tc.menu #tcStick,#tc.menu #tcBtns{display:none}#tcStick{display:none!important}
 #tc.off{display:none}
 #tcEsc{display:none}#tc.menu #tcEsc{display:block}
 html,body{overscroll-behavior:none}canvas{touch-action:none}
@@ -2862,13 +2862,13 @@ html,body{overscroll-behavior:none}canvas{touch-action:none}
   b.addEventListener('touchend',e=>{e.preventDefault();if(!hold)fire('keyup',code);},{passive:false});
  });
  // джойстик
- let sid=null,cx=0,cy=0;const R=55,D=.3;
+ window.JOY={x:0,z:0,on:false};let sid=null,cx=0,cy=0;const DEAD=10;function setDir(dx,dy){const l=Math.hypot(dx,dy);if(l<DEAD){JOY.on=false;JOY.x=JOY.z=0;return;}JOY.on=true;JOY.x=dx/l;JOY.z=dy/l;} const canStick=t=>screen.hidden&&typeof G!=='undefined'&&G&&!G.over&&!menuOpts&&t.clientX<innerWidth/2&&!(t.target.closest&&t.target.closest('button,#tcTop,#tcBtns,.panel,#inv,#map,#modal,#find')); document.addEventListener('touchstart',e=>{if(sid!==null)return;const t=e.changedTouches[0];if(!canStick(t))return;e.preventDefault();sid=t.identifier;cx=t.clientX;cy=t.clientY;setDir(0,0);},{passive:false,capture:true}); document.addEventListener('touchmove',e=>{for(const t of e.changedTouches)if(t.identifier===sid){e.preventDefault();setDir(t.clientX-cx,t.clientY-cy);}},{passive:false,capture:true}); const end=e=>{for(const t of e.changedTouches)if(t.identifier===sid){sid=null;setDir(0,0);}}; document.addEventListener('touchend',end,true);document.addEventListener('touchcancel',end,true); /* старый джойстик:
  function setDir(dx,dy){const l=Math.hypot(dx,dy),k=l>R?R/l:1;knob.style.transform=`translate(${dx*k}px,${dy*k}px)`;
   const nx=dx/R,ny=dy/R;keys.KeyD=nx>D;keys.KeyA=nx<-D;keys.KeyS=ny>D;keys.KeyW=ny<-D;}
  stick.addEventListener('touchstart',e=>{e.preventDefault();const t=e.changedTouches[0];sid=t.identifier;const r=stick.getBoundingClientRect();cx=r.left+r.width/2;cy=r.top+r.height/2;setDir(t.clientX-cx,t.clientY-cy);},{passive:false});
  stick.addEventListener('touchmove',e=>{e.preventDefault();for(const t of e.changedTouches)if(t.identifier===sid)setDir(t.clientX-cx,t.clientY-cy);},{passive:false});
  const end=e=>{for(const t of e.changedTouches)if(t.identifier===sid){sid=null;setDir(0,0);}};
- stick.addEventListener('touchend',end);stick.addEventListener('touchcancel',end);
+ */
  // зум двумя пальцами
  let pd=0;renderer.domElement.addEventListener('touchmove',e=>{if(e.touches.length===2){e.preventDefault();const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
   if(pd&&G)G.zoom=clamp(G.zoom+(pd-d)*.004,.55,2);pd=d;}},{passive:false});
